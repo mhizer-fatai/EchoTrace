@@ -1,0 +1,116 @@
+@import url('./tokens.css');
+
+/* Base Global Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Component Surface & Border Utilities */
+.component-border {
+  border: 1px solid var(--border-subtle);
+}
+
+.component-surface {
+  background-color: var(--surface-panel);
+}
+
+.component-surface-elevated {
+  background-color: var(--surface-elevated);
+}
+
+/* Interactive Timeline Styles */
+.timeline-line {
+  position: absolute;
+  left: 20px;
+  top: 40px;
+  bottom: -20px;
+  width: 1px;
+  background-color: var(--border-subtle);
+  z-index: 0;
+}
+
+.timeline-node {
+  position: relative;
+  z-index: 1;
+}
+
+/* Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--bg-canvas);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Canvas Graph Visualizer */
+#studioGraphCanvas {
+  cursor: grab;
+}
+
+#studioGraphCanvas:active {
+  cursor: grabbing;
+}
+
+/* Pulse Animation for Live Engine Status */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.15);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+/* Code Diff & Highlight Animations */
+.code-highlight-error {
+  background-color: rgba(225, 29, 72, 0.2);
+  color: var(--status-warning);
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.code-highlight-success {
+  background-color: rgba(46, 204, 113, 0.2);
+  color: var(--status-healthy);
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+/* Modal Transitions */
+#invalidateModal {
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
