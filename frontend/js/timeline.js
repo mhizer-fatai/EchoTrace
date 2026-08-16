@@ -38,12 +38,7 @@ class TimelineController {
         return;
       }
 
-      if (!this.minTimestamp || !this.maxTimestamp) {
-        // Mock 2-hour sliding window if no explicit timestamps
-        const now = Date.now();
-        this.minTimestamp = now - 2 * 3600 * 1000;
-        this.maxTimestamp = now;
-      }
+      if (!this.minTimestamp || !this.maxTimestamp) return;
 
       const currentMs = this.minTimestamp + (this.maxTimestamp - this.minTimestamp) * (val / 100.0);
       const currentDate = new Date(currentMs);
@@ -51,10 +46,10 @@ class TimelineController {
 
       this.label.textContent = `SNAPSHOT: ${currentDate.toLocaleTimeString()} (${currentDate.toLocaleDateString()})`;
 
-      if (window.apiClient && window.app && window.graphVisualizer) {
+      if (window.apiClient && window.app && window.app.graphVisualizer) {
         try {
           const snapshotData = await window.apiClient.getGraph(window.app.currentSessionId, isoString);
-          window.graphVisualizer.setData(snapshotData.nodes || [], snapshotData.edges || []);
+          window.app.graphVisualizer.setData(snapshotData.nodes || [], snapshotData.edges || []);
         } catch (err) {
           console.error('Time travel failed:', err);
         }

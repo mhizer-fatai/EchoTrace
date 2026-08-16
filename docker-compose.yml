@@ -1,23 +1,38 @@
-version: '3.8'
-
 services:
   hydradb:
     image: ghcr.io/hydra-db/hydradb:latest
     container_name: echotrace-hydradb
     restart: unless-stopped
+    user: "0:0"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        mkdir -p /data/store /data/cache &&
+        printf '%s\n' 'local-development-token-32-bytes' > /data/auth-token &&
+        exec /usr/local/bin/graph-node
     ports:
       - "7687:7687"   # Bolt protocol
       - "8443:8443"   # HTTPS REST API
+      - "9090:9090"   # Admin readiness and metrics
     environment:
       - RUST_LOG=info
-      - HYDRADB_HTTP_PORT=8443
-      - HYDRADB_BOLT_PORT=7687
-      - HYDRADB_ALLOW_PLAINTEXT_AUTH=true
-      - HYDRADB_AUTH_TOKEN=local-development-token-32-bytes
+      - RUST_MIN_STACK=33554432
+      - CLOUD_PROVIDER=local
+      - LOCAL_PATH=/data/store
+      - GRAPH_NAMESPACE=default
+      - GRAPH_ID=default
+      - GRAPH_CELL_ID=cell-0
+      - GRAPH_CELLS=cell-0
+      - GRAPH_NODE_ID=node-0
+      - GRAPH_BOLT_NODE_ADDRESSES=node-0=hydradb:7687
+      - GRAPH_ADVERTISED_BOLT_ADDR=hydradb:7687
+      - GRAPH_DATA_CACHE_DIR=/data/cache
+      - GRAPH_AUTH_TOKEN_FILE=/data/auth-token
+      - GRAPH_ALLOW_PLAINTEXT=true
     volumes:
-      - hydradb_data:/var/lib/hydradb/data
+      - ./hydradb-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8443/healthz"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9090; printf 'GET /readyz HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3; read -r status <&3; [[ $$status == *' 200 '* ]]" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -29,18 +44,16 @@ services:
     container_name: echotrace-app
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${ECHOTRACE_PUBLISHED_PORT:-8000}:8000"
     environment:
       - ECHOTRACE_HOST=0.0.0.0
       - ECHOTRACE_PORT=8000
       - HYDRADB_BOLT_URI=bolt://hydradb:7687
       - HYDRADB_AUTH_TOKEN=local-development-token-32-bytes
       - HYDRADB_ALLOW_PLAINTEXT=true
-      - USE_IN_MEMORY_FALLBACK=true
+      - USE_IN_MEMORY_FALLBACK=false
+      - EXECUTOR_ALLOWED_HOSTS=host.docker.internal
+      - EXECUTOR_TIMEOUT_SECONDS=30
     depends_on:
       hydradb:
         condition: service_healthy
-
-volumes:
-  hydradb_data:
-    driver: local

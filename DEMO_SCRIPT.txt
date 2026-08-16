@@ -1,0 +1,124 @@
+ECHOTRACE - HACK HYDRA DEMO SCRIPT
+Target length: 2 minutes 40 seconds
+Track: Memory and Context Retrieval
+
+RECORDING SETUP
+
+- Start the project with: docker compose up --build
+- Open: http://localhost:8000
+- Use a desktop browser at 100% zoom.
+- Refresh with Ctrl+F5 before recording.
+- Keep the mouse still unless an action is listed.
+- Speak naturally. Do not read section titles aloud.
+
+0:00-0:15 - THE PROBLEM AND SOLUTION AS ONE
+
+ON SCREEN
+Show the homepage hero. Slowly move the pointer across the headline and the two-session example.
+
+SAY
+"AI agents lose context between conversations, and when a fact changes, they can keep acting on the old version. EchoTrace solves both problems with cross-session memory that returns the current answer, cites where it came from, preserves what changed, and refuses to guess when the evidence is missing."
+
+0:15-0:28 - WHAT WE BUILT
+
+ON SCREEN
+Scroll just enough to show the first problem-and-solution rows.
+
+SAY
+"We built a memory and decision-provenance layer for AI agents. Instead of storing disconnected text, EchoTrace connects conversation messages, memories, updates, agent decisions, and generated outputs in one temporal graph."
+
+0:28-0:38 - OPEN THE LIVE DEMO
+
+ON SCREEN
+Scroll back to the hero and click "See EchoTrace in action." Wait for the graph and green result banner to load.
+
+SAY
+"Here is the complete flow running on HydraDB. This demo asks a simple question across two separate conversations: when is the user's trip?"
+
+0:38-0:55 - THE EARLIER MEMORY
+
+ON SCREEN
+Click the amber node labeled "session_04: message." Then click the gray June memory node. Point to SUPERSEDED in the inspector.
+
+SAY
+"In session four, the user said, 'My trip is in June.' EchoTrace stores the original message and extracts June as a supported memory. That memory is still visible, but it is gray because it was later superseded."
+
+0:55-1:14 - THE CURRENT MEMORY
+
+ON SCREEN
+Click the amber node labeled "session_18: message." Then click the green October memory node. Point to VALID in the inspector and the result banner above the metrics.
+
+SAY
+"In session eighteen, the user says, 'I moved my trip to October.' EchoTrace makes October the current value without deleting the history. The answer is October, the source is session eighteen, and June remains available as the earlier memory."
+
+1:14-1:28 - WHY THIS IS MORE THAN SEARCH
+
+ON SCREEN
+Keep the October node selected. Trace the visible line between October and the source message with the pointer.
+
+SAY
+"This is not a similarity guess. The answer carries a real relationship to the source message, session, timestamp, and quote. If no stored memory supports a question, EchoTrace returns insufficient evidence instead of inventing an answer."
+
+1:28-1:48 - MEMORY WITH CONSEQUENCES
+
+ON SCREEN
+Click the blue Travel Planner node, then the purple "Plan October trip" decision, then the orange itinerary output.
+
+SAY
+"EchoTrace also records what the memory influenced. The Travel Planner uses the current October memory to make this decision, and that decision produces the itinerary. We can trace the final output all the way back to the exact conversation that shaped it."
+
+1:48-2:08 - WHAT HAPPENS WHEN MEMORY CHANGES
+
+ON SCREEN
+Select the green October memory. Point to the "Invalidate selected fact" and "Execute stale subgraph" controls, but do not run them during the main recording.
+
+SAY
+"When an upstream memory becomes wrong, EchoTrace follows the dependency chain, marks only the affected decisions and outputs as stale, and can rerun that branch in dependency order. Healthy work stays untouched, and failed recovery remains visible."
+
+2:08-2:27 - WHY HYDRADB MATTERS
+
+ON SCREEN
+Move the pointer across the connected graph. Briefly point to the "HYDRADB BOLT" status in the header and the historical snapshot control at the bottom.
+
+SAY
+"HydraDB is doing the core work here. It durably stores the temporal graph, source relationships, supersession links, and downstream dependencies. Graph traversal lets us answer what is current, what changed, and what that change affects - questions that flat text or vector similarity cannot answer reliably."
+
+2:27-2:40 - CLOSE
+
+ON SCREEN
+Click "Back to overview" and stop on the hero headline.
+
+SAY
+"EchoTrace gives AI agents memory that explains itself: ask across sessions, get the current answer, see the proof, and recover precisely when memory changes. That is EchoTrace, built for Track Three on HydraDB."
+
+OPTIONAL BACKUP DEMO - ONLY IF TIME REMAINS
+
+Do not include this if the main recording is close to three minutes.
+
+1. In the studio, click "Load demo story" to reset the repeatable graph.
+2. Select the October memory.
+3. Click "Invalidate selected fact."
+4. Enter a clear reason such as: "The trip was moved again."
+5. Enter a replacement value such as: "November."
+6. Submit and show the affected decision and itinerary becoming stale.
+
+Do not click "Execute stale subgraph" unless a local executor service is running. The built-in demo uses placeholder executor URLs to show the dependency and recovery contract, not to call an external AI service.
+
+KEY POINTS TO REMEMBER
+
+- Problem: agents lose context and continue using outdated facts.
+- Solution: cross-session temporal memory with evidence and dependency tracking.
+- Current answer: October.
+- Source: session 18.
+- Historical answer: June, marked superseded.
+- Missing evidence: EchoTrace abstains.
+- Consequence tracking: memory -> decision -> output.
+- HydraDB role: durable graph storage, temporal relationships, and traversal.
+- No API key is required for the app or demo.
+
+AVOID SAYING
+
+- Do not claim LongMemEval benchmark scores; none have been measured.
+- Do not claim the demo uses an LLM; it uses deterministic extraction and structured graph retrieval.
+- Do not say HydraDB is only storage. It also powers the relationship model and graph reads used by retrieval and blast-radius analysis.
+- Do not describe June as deleted. It is preserved as superseded history.

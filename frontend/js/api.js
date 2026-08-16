@@ -60,20 +60,8 @@ const API = {
     return await res.json();
   },
 
-  async loadScenario(scenarioType = 'api_deprecation', sessionId = 'default') {
-    // Normalize scenario type string
-    const normalizedType = scenarioType.replace(/-/g, '_');
-    const res = await fetch(`${this.baseUrl}/api/demo/load-scenario?scenario_type=${normalizedType}&session_id=${sessionId}`, {
-      method: 'POST'
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  },
-
-  async runSimulation(sessionId = 'live_simulation') {
-    const res = await fetch(`${this.baseUrl}/api/demo/run-sim?session_id=${sessionId}`, {
-      method: 'POST'
-    });
+  async loadTrackThreeDemo() {
+    const res = await fetch(`${this.baseUrl}/api/demo/track-three`, { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   }

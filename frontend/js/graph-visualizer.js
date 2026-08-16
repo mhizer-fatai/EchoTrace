@@ -62,7 +62,7 @@ class GraphVisualizer {
       ...n,
       x: n.x || 0,
       y: n.y || 0,
-      radius: n.kind === 'AGENT' ? 22 : n.kind === 'DECISION' ? 18 : 16
+      radius: n.kind === 'AGENT' ? 22 : n.kind === 'DECISION' ? 18 : n.kind === 'MESSAGE' ? 17 : 16
     }));
     this.edges = rawEdges;
     this.nodeMap.clear();
@@ -90,6 +90,9 @@ class GraphVisualizer {
       }
       return node.id;
     }
+    if (node.kind === 'MESSAGE') {
+      return node.source_session_id ? `${node.source_session_id}: message` : (node.label || node.id);
+    }
     if (node.kind === 'FACT') {
       if (node.entity && node.property_value) {
         return `${node.entity}: ${node.property_value}`;
@@ -115,6 +118,7 @@ class GraphVisualizer {
     const tiers = {
       AGENT: [],
       EVIDENCE: [],
+      MESSAGE: [],
       FACT: [],
       DECISION: [],
       ARTIFACT: []
@@ -129,7 +133,7 @@ class GraphVisualizer {
       }
     });
 
-    const tierKeys = ['AGENT', 'EVIDENCE', 'FACT', 'DECISION', 'ARTIFACT'];
+    const tierKeys = ['MESSAGE', 'EVIDENCE', 'FACT', 'AGENT', 'DECISION', 'ARTIFACT'];
     const activeTiers = tierKeys.filter(k => tiers[k].length > 0);
     const tierHeight = (height - 140) / Math.max(1, activeTiers.length - 1);
 
@@ -305,6 +309,7 @@ class GraphVisualizer {
     else if (node.kind === 'DECISION') baseColor = isLight ? '#7E22CE' : '#A855F7'; // Purple Decision
     else if (node.kind === 'ARTIFACT') baseColor = isLight ? '#E04B2F' : '#F05638'; // Vermilion Artifact
     else if (node.kind === 'EVIDENCE') baseColor = isLight ? '#B45309' : '#F59E0B'; // Amber Evidence
+    else if (node.kind === 'MESSAGE') baseColor = isLight ? '#B45309' : '#F59E0B'; // Amber source message
 
     if (node.status === 'SUPERSEDED') baseColor = isLight ? '#9AA3B2' : '#5A6270';
     if (isStale) baseColor = isLight ? '#BE123C' : '#E11D48';

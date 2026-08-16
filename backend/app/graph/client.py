@@ -1,5 +1,8 @@
 import logging
+import json
+import hashlib
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional
 import networkx as nx
 
@@ -17,7 +20,7 @@ logger = logging.getLogger("echotrace.graph.client")
 class InMemoryGraphStore:
     """
     In-memory graph database engine with native DAG traversal and temporal filtering.
-    Used for local development, instant unit testing, and standalone demonstration.
+    Used for local development and isolated unit testing.
     """
 
     def __init__(self):
@@ -135,7 +138,7 @@ class InMemoryGraphStore:
             for predecessor in self.graph.predecessors(current):
                 edge_data = self.graph.get_edge_data(predecessor, current)
                 edge_type = edge_data.get("edge_type", "")
-                if edge_type in ["DEPENDS_ON", "TRIGGERED", "PRODUCED", "SUPPORTED_BY"]:
+                if edge_type in ["DEPENDS_ON", "TRIGGERED"]:
                     if predecessor not in visited and predecessor != start_node_id:
                         node_data = self.nodes.get(predecessor, {})
                         if node_data.get("session_id") == session_id:
@@ -188,13 +191,23 @@ class HydraDBClient:
                 auth=auth,
                 encrypted=not settings.hydradb_allow_plaintext,
             )
-            # Verify connectivity with a lightweight ping
+            # HydraDB's row executor requires a MATCH query for Bolt reads.
             with self.bolt_driver.session() as session:
-                session.run("RETURN 1 as ping")
+                session.run(
+                    "MATCH (n:EchoTraceNode) RETURN count(*) AS node_count"
+                ).consume()
             self.connected_to_hydradb = True
             logger.info("Successfully connected to HydraDB via Bolt")
         except Exception as exc:
             self.connected_to_hydradb = False
+            if self.bolt_driver:
+                self.bolt_driver.close()
+                self.bolt_driver = None
+            if not settings.use_in_memory_fallback:
+                raise RuntimeError(
+                    f"HydraDB is unavailable at {settings.hydradb_bolt_uri} and "
+                    "USE_IN_MEMORY_FALLBACK is disabled."
+                ) from exc
             logger.warning(
                 f"HydraDB not reachable at {settings.hydradb_bolt_uri}. "
                 f"Using internal high-performance graph engine. (Reason: {exc})"
@@ -210,30 +223,227 @@ class HydraDBClient:
                     result = session.run(query, parameters or {})
                     return [record.data() for record in result]
             except Exception as exc:
-                logger.error(f"Error executing Cypher on HydraDB: {exc}")
-                raise exc
+                # Bolt connections can become stale after HydraDB restarts or a
+                # long idle period. Reconnect once so the first demo click does
+                # not fail while the graph itself remains healthy.
+                logger.warning("HydraDB query failed; reconnecting once: %s", exc)
+                try:
+                    self.bolt_driver.close()
+                except Exception:
+                    pass
+                self.bolt_driver = None
+                self.connected_to_hydradb = False
+                self._init_connection()
+                if not self.connected_to_hydradb or not self.bolt_driver:
+                    raise exc
+                with self.bolt_driver.session() as session:
+                    result = session.run(query, parameters or {})
+                    return [record.data() for record in result]
         return []
 
+    @staticmethod
+    def _serialize_properties(data: Dict[str, Any]) -> Dict[str, Any]:
+        serialized: Dict[str, Any] = {}
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                serialized[key] = value.isoformat()
+            elif isinstance(value, Enum):
+                serialized[key] = value.value
+            elif isinstance(value, (dict, list)):
+                serialized[key] = json.dumps(value)
+            else:
+                serialized[key] = value
+        return serialized
+
+    @staticmethod
+    def _deserialize_properties(data: Dict[str, Any]) -> Dict[str, Any]:
+        result = dict(data)
+        for key in ("metadata", "parameters"):
+            value = result.get(key)
+            if isinstance(value, str):
+                try:
+                    result[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
+        return result
+
+    def _node_parameters(self, node_dict: Dict[str, Any]) -> Dict[str, Any]:
+        serialized = self._serialize_properties(node_dict)
+        return {
+            "id": str(serialized["id"]),
+            "native_id": self._native_id(str(serialized["id"])),
+            "session_id": str(serialized.get("session_id", "default")),
+            "session_native_id": self._native_id(
+                f"session:{serialized.get('session_id', 'default')}"
+            ),
+            "kind": str(serialized.get("kind", "")),
+            "valid_from": str(serialized.get("valid_from", "")),
+            "valid_to": serialized.get("valid_to") or "",
+            "status": str(serialized.get("status", "")),
+            "is_stale": bool(serialized.get("is_stale", False)),
+            "payload": json.dumps(serialized),
+        }
+
+    @staticmethod
+    def _native_id(value: str) -> int:
+        digest = hashlib.sha256(value.encode("utf-8")).digest()
+        return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
+
+    @staticmethod
+    def _node_from_record(record: Dict[str, Any]) -> Dict[str, Any]:
+        payload = record.get("payload") or "{}"
+        node = json.loads(payload)
+        node.update({
+            "id": record.get("id", node.get("id")),
+            "session_id": record.get("session_id", node.get("session_id")),
+            "kind": record.get("kind", node.get("kind")),
+            "valid_from": record.get("valid_from", node.get("valid_from")),
+            "valid_to": record.get("valid_to") or None,
+            "status": record.get("status", node.get("status")),
+            "is_stale": record.get("is_stale", node.get("is_stale", False)),
+        })
+        return node
+
+    @staticmethod
+    def _node_projection(alias: str = "n") -> str:
+        fields = ("session_id", "kind", "valid_from", "valid_to", "status", "is_stale", "payload")
+        projected = [f"{alias}.echotrace_id AS id"]
+        projected.extend(f"{alias}.{field} AS {field}" for field in fields)
+        return ", ".join(projected)
+
     def add_node(self, node: BaseGraphNode) -> Dict[str, Any]:
-        node_dict = node.model_dump()
-        return self.in_memory.add_node(node_dict)
+        node_dict = node.model_dump() if hasattr(node, "model_dump") else dict(node)
+        if not self.connected_to_hydradb:
+            return self.in_memory.add_node(node_dict)
+
+        parameters = self._node_parameters(node_dict)
+        if self.get_node(parameters["id"]):
+            return self.update_node(parameters["id"], node_dict) or node_dict
+        node_pattern = (
+            "(n:EchoTraceNode {id: $native_id, echotrace_id: $id, session_id: $session_id, kind: $kind, "
+            "valid_from: $valid_from, valid_to: $valid_to, status: $status, "
+            "is_stale: $is_stale, payload: $payload})"
+        )
+        query = (
+            "CREATE (:EchoTraceSession {id: $session_native_id, session_key: $session_id})"
+            f"-[:CONTAINS]->{node_pattern}"
+        )
+        self.execute_cypher(query, parameters)
+        return self._node_from_record(parameters)
 
     def add_edge(self, edge: GraphEdge) -> GraphEdge:
-        return self.in_memory.add_edge(edge)
+        if not self.connected_to_hydradb:
+            return self.in_memory.add_edge(edge)
+
+        edge_data = self._serialize_properties(edge.model_dump())
+        self.execute_cypher(
+            "MERGE (source:EchoTraceNode {id: $source_native_id})"
+            "-[:ECHOTRACE_EDGE {echotrace_edge_id: $id, source_id: $source_id, "
+            "target_id: $target_id, edge_type: $edge_type, created_at: $created_at, "
+            "payload: $payload}]->(target:EchoTraceNode {id: $target_native_id})",
+            {
+                "id": edge.id,
+                "source_id": edge.source_id,
+                "target_id": edge.target_id,
+                "source_native_id": self._native_id(edge.source_id),
+                "target_native_id": self._native_id(edge.target_id),
+                "edge_type": edge.edge_type.value if hasattr(edge.edge_type, "value") else str(edge.edge_type),
+                "created_at": str(edge_data["created_at"]),
+                "payload": json.dumps(edge_data),
+            },
+        )
+        return edge
 
     def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
-        return self.in_memory.get_node(node_id)
+        if not self.connected_to_hydradb:
+            return self.in_memory.get_node(node_id)
+        records = self.execute_cypher(
+            f"MATCH (n:EchoTraceNode {{id: $native_id}}) RETURN {self._node_projection()}",
+            {"native_id": self._native_id(str(node_id))},
+        )
+        if not records:
+            return None
+        return self._node_from_record(records[0])
 
     def update_node(self, node_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        return self.in_memory.update_node(node_id, updates)
+        if not self.connected_to_hydradb:
+            return self.in_memory.update_node(node_id, updates)
+        current = self.get_node(node_id)
+        if not current:
+            return None
+        current.update(updates)
+        parameters = self._node_parameters(current)
+        self.execute_cypher(
+            "MATCH (n:EchoTraceNode {id: $native_id}) "
+            "SET n.session_id = $session_id, n.kind = $kind, "
+            "n.valid_from = $valid_from, n.valid_to = $valid_to, "
+            "n.status = $status, n.is_stale = $is_stale, n.payload = $payload",
+            parameters,
+        )
+        return self._node_from_record(parameters)
 
     def get_session_graph(
         self, session_id: str, snapshot_time: Optional[datetime] = None
     ) -> Dict[str, Any]:
-        return self.in_memory.get_session_graph(session_id, snapshot_time)
+        if not self.connected_to_hydradb:
+            return self.in_memory.get_session_graph(session_id, snapshot_time)
+
+        parameters: Dict[str, Any] = {"session_id": session_id}
+        temporal_filter = ""
+        if snapshot_time:
+            parameters["snapshot_time"] = snapshot_time.isoformat()
+            temporal_filter = (
+                " AND n.valid_from <= $snapshot_time "
+                "AND (n.valid_to IS NULL OR n.valid_to > $snapshot_time)"
+            )
+        records = self.execute_cypher(
+            "MATCH (n:EchoTraceNode {session_id: $session_id})"
+            + temporal_filter
+            + f" RETURN {self._node_projection()}",
+            parameters,
+        )
+        nodes = [self._node_from_record(record) for record in records]
+        node_ids = [node["id"] for node in nodes]
+        if not node_ids:
+            return {"nodes": [], "edges": []}
+        edge_records = self.execute_cypher(
+            "MATCH (s:EchoTraceNode)-[r:ECHOTRACE_EDGE]->(t:EchoTraceNode) "
+            "WHERE s.session_id = $session_id AND t.session_id = $session_id "
+            "RETURN r.echotrace_edge_id AS id, r.source_id AS source_id, r.target_id AS target_id, "
+            "r.edge_type AS edge_type, r.created_at AS created_at, r.payload AS payload",
+            {"session_id": session_id},
+        )
+        edges = []
+        for record in edge_records:
+            edge = json.loads(record.get("payload") or "{}")
+            edge.update({key: record.get(key, edge.get(key)) for key in ("id", "source_id", "target_id", "edge_type", "created_at")})
+            edges.append(edge)
+        return {"nodes": nodes, "edges": edges}
 
     def get_downstream_dependencies(self, fact_id: str, session_id: str) -> List[str]:
-        return self.in_memory.get_downstream_nodes(fact_id, session_id)
+        if not self.connected_to_hydradb:
+            return self.in_memory.get_downstream_nodes(fact_id, session_id)
+        downstream: List[str] = []
+        queue = [fact_id]
+        visited = {fact_id}
+        while queue:
+            current = queue.pop(0)
+            current_native_id = self._native_id(current)
+            records = self.execute_cypher(
+                "MATCH (dependent:EchoTraceNode)-[r:ECHOTRACE_EDGE]->"
+                f"(source:EchoTraceNode {{id: {current_native_id}}}) "
+                "WHERE dependent.session_id = $session_id AND "
+                "(r.edge_type = 'DEPENDS_ON' OR r.edge_type = 'TRIGGERED') "
+                "RETURN dependent.echotrace_id AS id",
+                {"session_id": session_id},
+            )
+            for record in records:
+                dependent_id = record["id"]
+                if dependent_id not in visited:
+                    visited.add(dependent_id)
+                    downstream.append(dependent_id)
+                    queue.append(dependent_id)
+        return downstream
 
     def invalidate_fact_node(self, fact_id: str, timestamp: datetime) -> Optional[Dict[str, Any]]:
         return self.update_node(
@@ -262,7 +472,13 @@ class HydraDBClient:
         return self.update_node(node_id, {"is_stale": is_stale})
 
     def clear_session(self, session_id: str):
-        self.in_memory.clear_session(session_id)
+        if not self.connected_to_hydradb:
+            self.in_memory.clear_session(session_id)
+            return
+        self.execute_cypher(
+            "MATCH (n:EchoTraceNode {session_id: $session_id}) DETACH DELETE n",
+            {"session_id": session_id},
+        )
 
 
 # Global singleton graph client instance

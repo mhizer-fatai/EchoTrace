@@ -1,169 +1,241 @@
-# EchoTrace — AI Agent Memory & Decision Provenance Engine
+# EchoTrace
 
-**EchoTrace** is an infrastructure engine for AI agents that builds a temporal dependency graph of an agent system's memory, decisions, and generated artifacts using **HydraDB**.
+EchoTrace is a cross-session memory, provenance, and recovery service for AI agents. It retrieves the current answer from conversation history, cites the source session and message, preserves facts that were later overwritten, and abstains when no evidence exists. When memory drives agent work, EchoTrace also identifies affected decisions and artifacts and calls their registered executors in dependency order.
 
-Instead of storing unlinked flat text or vector embeddings, EchoTrace preserves the deterministic causal chain of how facts influence decisions and generate actions over time. When an upstream assumption breaks, EchoTrace computes the downstream blast radius in milliseconds and enables selective, targeted re-execution.
+Built for **Hack Hydra Track 03: Memory and Context Retrieval**.
 
----
+## Problem
 
-## The Problem
+AI agents lose context across conversations and can continue acting on facts after those facts change. Similarity search may find related text, but it does not reliably identify the current value, explain which session supports it, preserve what was superseded, or show which decisions and outputs depend on it.
 
-In multi-agent workflows (e.g. Research -> Planning -> Coding -> Testing), agents pass information and assumptions to one another:
+EchoTrace turns conversation history into temporal, source-backed memory. It returns the current answer with evidence, keeps older values as history, abstains when evidence is missing, and traces changed memory into affected agent work.
+
+## Why HydraDB
+
+HydraDB is the durable source of truth for EchoTrace's memory graph. It stores messages, facts, supersession links, decisions, artifacts, and their relationships, then supports the graph reads and reverse dependency traversal used for retrieval and blast-radius analysis. Without HydraDB, EchoTrace would lose durable cross-session provenance and the relationship structure needed to explain what changed and what that change affects.
+
+## Tech Stack
+
+- HydraDB with OpenCypher over Bolt for durable graph storage and traversal
+- FastAPI, Pydantic, and Uvicorn for the backend API
+- Python SDK with Requests for workflow instrumentation and memory ingestion
+- NetworkX for the isolated development fallback and local dependency ordering
+- HTML, CSS, Tailwind CSS, and JavaScript Canvas for the dashboard and graph explorer
+- Docker Compose for the reproducible local deployment
+
+## Capabilities
+
+- Durable graph storage in HydraDB over Bolt/OpenCypher
+- Cross-session conversation memory and evidence-backed retrieval
+- Chronological supersession with current and historical values
+- Explicit abstention when no supporting memory exists
+- Explicit fact, evidence, decision, and artifact provenance
+- Multi-hop blast-radius calculation
+- Fact invalidation and temporal supersession
+- Real decision and artifact re-execution through HTTP webhooks
+- Failure-safe execution that leaves failed nodes stale
+- Historical graph snapshots and contradiction reporting
+- Python instrumentation SDK and operational dashboard
+
+## Architecture
 
 ```text
-Research Agent ("API v1 is active")
-       ↓
-Planning Agent ("Design for API v1")
-       ↓
-Coding Agent (generates payments_client.py with v1)
-       ↓
-Testing Agent (generates test_payments.py for v1)
+Agent application -> EchoTrace SDK -> FastAPI -> HydraDB
+                                         |
+                                         +-> registered HTTP executors
 ```
 
-When an upstream premise is later invalidated (*"API v1 was deprecated two weeks ago"*), standard vector memory systems cannot determine:
-1. Which agent introduced the assumption?
-2. Which downstream decisions relied on it?
-3. Which generated code files or database updates were contaminated?
-4. What exact subset of the workflow needs to be re-run?
+HydraDB is authoritative whenever it is connected. The NetworkX store is an explicit development fallback and is not durable.
 
----
-
-## The EchoTrace Solution
-
-EchoTrace models agent workflows as a directed acyclic temporal graph in **HydraDB**:
-
-```text
-(:Agent) --[:PRODUCED]--> (:Fact {valid_from, valid_to, status})
-                             |
-                      [:DEPENDS_ON]
-                             |
-                             v
-                        (:Decision) --[:TRIGGERED]--> (:Artifact)
-```
-
-### Core Capabilities
-
-1. **Deterministic Decision Provenance:** Explicitly links agent decisions to the supporting facts and evidence sources that justified them.
-2. **Cascade Invalidation & Blast Radius Analysis:** Automatically traverses the reverse dependency graph to identify all corrupted downstream decisions and artifacts when a belief changes.
-3. **Selective Subgraph Auto-Healing:** Re-prompts and re-executes only the contaminated nodes in topological order, leaving healthy branches untouched.
-4. **Time-Travel Memory State Reconstruction:** Reconstructs the exact state of what the agent system believed and what was active at any point in history.
-5. **Memory Health & Contradiction Monitor:** Audits the graph for stale dependencies, evidence coverage, and conflicting beliefs held across different agents.
-
----
-
-## Quick Start
-
-### 1. Installation
+## Run With Docker
 
 ```bash
-git clone https://github.com/mhizer-fatai/EchoTrace.git
-cd EchoTrace
-pip install -r requirements.txt
+docker compose up --build
 ```
 
-### 2. Run EchoTrace Server & Dashboard
+Prerequisite: Docker Desktop or Docker Engine with the Compose plugin. Compose creates the local HydraDB directories and development authentication token automatically.
+
+Open `http://localhost:8000`. Click **Launch App** to load the built-in Track 03 memory graph, or use the session field to load data ingested by a real agent application.
+If port 8000 is occupied, set `ECHOTRACE_PUBLISHED_PORT` before starting Compose.
+
+Compose follows HydraDB v0.1.1's single-node local-storage contract. Durable files are written under `hydradb-data/store`, disposable cache files under `hydradb-data/cache`, and readiness is checked through the admin endpoint on port `9090`.
+
+EchoTrace maps its readable string node IDs to deterministic 63-bit HydraDB vertex IDs. The original IDs remain available as `echotrace_id`, while HydraDB's native integer IDs drive adjacency and traversal.
+
+Relevant environment variables:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `HYDRADB_BOLT_URI` | HydraDB Bolt endpoint | `bolt://127.0.0.1:7687` |
+| `HYDRADB_AUTH_TOKEN` | HydraDB authentication token | local development token |
+| `USE_IN_MEMORY_FALLBACK` | Permit non-durable startup without HydraDB | `true` |
+| `EXECUTOR_ALLOWED_HOSTS` | Comma-separated webhook host allowlist | empty |
+| `EXECUTOR_TIMEOUT_SECONDS` | Per-node execution timeout | `30` |
+| `EXECUTOR_BEARER_TOKEN` | Optional shared bearer credential | empty |
+
+Set `USE_IN_MEMORY_FALLBACK=false` outside local development. At least one host must be present in `EXECUTOR_ALLOWED_HOSTS` before stale nodes can be executed.
+
+## Instrument A Workflow
+
+Install the SDK locally:
 
 ```bash
-python run.py
+pip install -e ./sdk
 ```
-Open your browser at **http://localhost:8000** to access the interactive Developer Dashboard.
-
----
-
-## Connecting to HydraDB
-
-EchoTrace connects to HydraDB using the **Neo4j Bolt 5.x protocol** (port `7687`) and OpenCypher.
-
-To run with a live HydraDB container:
-
-```bash
-# Pull official HydraDB release
-docker pull ghcr.io/hydra-db/hydradb:latest
-
-# Start HydraDB node
-docker run --rm \
-  -p 7687:7687 -p 8443:8443 \
-  -v "$PWD/hydradb-data:/data" \
-  -e CLOUD_PROVIDER=local \
-  -e LOCAL_PATH=/data/store \
-  -e GRAPH_NAMESPACE=default \
-  -e GRAPH_ID=default \
-  -e GRAPH_ALLOW_PLAINTEXT=true \
-  ghcr.io/hydra-db/hydradb:latest
-```
-
-EchoTrace automatically detects and connects to `bolt://127.0.0.1:7687`. If running standalone, EchoTrace automatically activates its internal in-memory graph engine with identical OpenCypher query semantics.
-
----
-
-## Developer SDK Usage
-
-Instrument your multi-agent system in 3 lines of code:
 
 ```python
-from sdk.echotrace import EchoTrace
+from echotrace import EchoTrace
 
 tracer = EchoTrace(endpoint="http://localhost:8000", session_id="sprint_42")
 
+
 @tracer.agent(name="Researcher", role="API Specialist")
 def research_api():
-    fact_id = tracer.log_fact(
+    return tracer.log_fact(
         entity="PaymentsAPI",
         property_name="version",
-        property_value="v1",
+        property_value="v2",
         confidence=0.98,
-        evidence_source="https://docs.payments.com/v1"
+        evidence_source="https://docs.example.com/payments/v2",
     )
-    return fact_id
+
 
 @tracer.agent(name="Planner", role="System Architect")
 def plan_architecture(api_fact_id):
-    decision_id = tracer.log_decision(
+    return tracer.log_decision(
         action_type="GatewaySelection",
-        rationale="Selected PaymentsAPI based on active v1 spec.",
-        depends_on=[api_fact_id]
+        rationale="Selected the active PaymentsAPI specification.",
+        executor_url="https://agents.example.com/executors/planner",
+        depends_on=[api_fact_id],
     )
-    return decision_id
 ```
 
----
+Every decision and artifact requires an `executor_url`. The URL is stored as workflow metadata; executor credentials remain in the EchoTrace server environment.
+The SDK's `depends_on` argument accepts fact, decision, or artifact node IDs, allowing arbitrary multi-stage dependency chains.
 
-## Running the Test Suite
+## Cross-Session Memory
+
+Conversation messages can be ingested directly. Common first-person memory updates are extracted deterministically; applications can also provide structured memory claims for complex language.
+
+```python
+from echotrace import EchoTrace
+
+memory = EchoTrace(endpoint="http://localhost:8000")
+
+memory.ingest_conversation(
+    user_id="user_42",
+    session_id="session_04",
+    messages=[{"role": "user", "content": "My trip is in June."}],
+)
+memory.ingest_conversation(
+    user_id="user_42",
+    session_id="session_18",
+    messages=[{"role": "user", "content": "I moved my trip to October."}],
+)
+
+result = memory.query_memory("user_42", "When is my trip?")
+```
+
+The result answers `October`, cites `session_18`, and includes `June` as superseded history. A question without supporting evidence returns `INSUFFICIENT_EVIDENCE` with no generated answer.
+
+## Executor Contract
+
+EchoTrace sends this request to each stale node's executor:
+
+```json
+{
+  "node": {"id": "decision_123", "kind": "DECISION"},
+  "active_facts": [{"id": "fact_456", "status": "VALID"}],
+  "completed_dependencies": []
+}
+```
+
+A decision executor must return:
+
+```json
+{
+  "success": true,
+  "rationale": "New decision based on the current facts",
+  "metadata": {"model": "provider/model-name"}
+}
+```
+
+An artifact executor must return:
+
+```json
+{
+  "success": true,
+  "content": "new artifact content",
+  "metadata": {"validation": "passed"}
+}
+```
+
+Any network error, non-success HTTP status, malformed response, or `success: false` stops execution. The failed node and unprocessed downstream nodes remain stale.
+
+## API
+
+- `POST /api/ingest/agent`
+- `POST /api/ingest/fact`
+- `POST /api/ingest/decision`
+- `POST /api/ingest/artifact`
+- `POST /api/memory/conversations`
+- `POST /api/memory/query`
+- `POST /api/demo/track-three`
+- `POST /api/facts/invalidate?session_id=...`
+- `POST /api/subgraph/heal?session_id=...`
+- `GET /api/graph/{session_id}`
+- `GET /api/blast-radius/{session_id}/{fact_id}`
+- `GET /api/memory-health/{session_id}`
+- `GET /api/health`
+
+Interactive API documentation is available at `http://localhost:8000/docs`.
+
+## Tests
 
 ```bash
-pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
-All unit tests verify:
-* Multi-hop downstream blast radius calculation.
-* Fact invalidation and supersession edges.
-* Temporal historical snapshot queries.
-* Memory health scoring and contradiction detection.
-* SDK decorators and context tracking.
+The 15-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable Track 03 demo, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
 
----
+## Demo For Reviewers
 
-## Architecture Overview
+After starting Compose, open `http://localhost:8000` and click **Launch App**. EchoTrace seeds and opens an idempotent seven-node HydraDB story showing:
 
-```text
-+-------------------------------------------------------------+
-|                     EchoTrace Dashboard                     |
-|  Interactive DAG Visualizer . Blast Radius . Time Travel    |
-+------------------------------+------------------------------+
-                               | REST / WebSocket
-+------------------------------v------------------------------+
-|                      FastAPI Backend                        |
-|                                                             |
-|  * Engine Invalidator & Blast Radius Calculator             |
-|  * Contradiction & Memory Health Evaluator                  |
-|  * Topological Subgraph Auto-Healer                         |
-+------------------------------+------------------------------+
-                               | OpenCypher / Bolt
-+------------------------------v------------------------------+
-|                         HydraDB                             |
-|                                                             |
-|  * Object-Store Durable Graph Storage                       |
-|  * Snapshot-Consistent Temporal Traversal                   |
-|  * Fast Multi-Hop GraphBLAS Sparse Path Matrix Evaluation   |
-+-------------------------------------------------------------+
-```
+- `session_04`: the trip is in June
+- `session_18`: the trip moves to October
+- June preserved as superseded history
+- October returned as the current answer with its source citation
+- an unsupported question returning `INSUFFICIENT_EVIDENCE`
+- a planning decision and itinerary linked to the current memory
+
+No model API key is required for the application, demo, memory query, or test suite.
+
+## Live HydraDB Verification
+
+The Docker deployment has been verified against `ghcr.io/hydra-db/hydradb:latest` (`v0.1.1`) with this sequence:
+
+1. Start HydraDB and confirm `/readyz`.
+2. Confirm EchoTrace reports `HydraDB Bolt` mode.
+3. Ingest an agent, fact, decision, artifact, and dependency edges.
+4. Read the complete session back through EchoTrace.
+5. Restart only EchoTrace and confirm the graph persists.
+6. Compute a two-hop reverse dependency blast radius in HydraDB.
+7. Supersede the fact and persist stale downstream state.
+8. Restart EchoTrace again and confirm the replacement fact and stale state persist.
+
+## Third-Party Attribution
+
+EchoTrace is original hackathon work built with these open-source projects and hosted frontend resources:
+
+- [HydraDB](https://github.com/hydra-db/hydradb), AGPL-3.0, durable graph storage and OpenCypher/Bolt execution
+- [FastAPI](https://github.com/fastapi/fastapi), MIT, HTTP API framework
+- [Uvicorn](https://github.com/encode/uvicorn), BSD-3-Clause, ASGI server
+- [Neo4j Python Driver](https://github.com/neo4j/neo4j-python-driver), Apache-2.0, Bolt client used to communicate with HydraDB
+- [NetworkX](https://github.com/networkx/networkx), BSD-3-Clause, isolated development fallback and local ordering utilities
+- [Pydantic](https://github.com/pydantic/pydantic), MIT, request and graph-model validation
+- [Requests](https://github.com/psf/requests), Apache-2.0, SDK and executor HTTP calls
+- [Tailwind CSS browser build](https://tailwindcss.com/), MIT, frontend utility styling loaded from the official CDN
+- [Google Fonts and Material Symbols](https://fonts.google.com/), font and icon assets loaded from Google Fonts
+
+LongMemEval and other benchmark datasets are not bundled, modified, or used to claim measured results in this repository.

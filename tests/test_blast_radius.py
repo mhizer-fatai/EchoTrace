@@ -1,44 +1,77 @@
-import pytest
-from backend.app.demo.scenarios import load_api_deprecation_scenario
+from unittest.mock import Mock, patch
+
+from backend.app.config import settings
 from backend.app.engine.blast_radius import calculate_blast_radius
-from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.healer import heal_subgraph
-from backend.app.models.schemas import InvalidateFactRequest, FactStatus
+from backend.app.engine.invalidator import invalidate_fact
+from backend.app.graph.client import graph_client
+from backend.app.models.schemas import InvalidateFactRequest
+from tests.fixtures import load_workflow
 
 
-def test_blast_radius_calculation():
+def test_blast_radius_only_contains_executable_dependents():
     session_id = "test_blast_session"
-    load_api_deprecation_scenario(session_id)
+    load_workflow(session_id)
 
-    # Calculate blast radius for fact_api_v1
-    report = calculate_blast_radius("fact_api_v1", session_id=session_id)
+    report = calculate_blast_radius("fact_api", session_id)
 
-    assert report.invalidated_fact_id == "fact_api_v1"
-    # Should affect dec_use_v1 -> dec_generate_client -> art_client_py -> dec_generate_test -> art_test_py
-    assert report.affected_nodes_count >= 4
-    assert report.affected_decisions_count >= 2
-    assert report.affected_artifacts_count >= 2
-    assert len(report.remediation_order) >= 4
+    assert set(node["id"] for node in report.affected_nodes) == {
+        "decision_client",
+        "artifact_client",
+    }
+    assert report.remediation_order == ["decision_client", "artifact_client"]
 
 
-def test_fact_invalidation_and_heal():
-    session_id = "test_invalidation_session"
-    load_api_deprecation_scenario(session_id)
-
-    req = InvalidateFactRequest(
-        fact_id="fact_api_v1",
-        reason="API v1 was deprecated.",
-        replacement_value="v2",
-        auto_heal=False,
+def test_invalidation_reexecutes_webhooks_in_dependency_order():
+    session_id = "test_execution_session"
+    load_workflow(session_id)
+    invalidate_fact(
+        InvalidateFactRequest(
+            fact_id="fact_api",
+            reason="Superseded by current documentation",
+            replacement_value="v2",
+        ),
+        session_id,
     )
-    result = invalidate_fact(req, session_id=session_id)
+    responses = [
+        {"success": True, "rationale": "Target v2"},
+        {"success": True, "content": "API_VERSION = 'v2'"},
+    ]
 
-    assert result["status"] == "success"
-    assert result["new_fact_id"] is not None
-    assert result["blast_radius"]["affected_nodes_count"] >= 4
+    def post(url, **kwargs):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = responses.pop(0)
+        return response
 
-    # Now execute selective auto-heal
-    heal_resp = heal_subgraph(session_id=session_id)
-    assert heal_resp.success is True
-    assert len(heal_resp.re_executed_nodes) >= 4
-    assert len(heal_resp.updated_artifacts) >= 2
+    previous_hosts = settings.executor_allowed_hosts
+    settings.executor_allowed_hosts = "executor.example.test"
+    try:
+        with patch("backend.app.engine.healer.requests.post", side_effect=post) as request_post:
+            result = heal_subgraph(session_id)
+    finally:
+        settings.executor_allowed_hosts = previous_hosts
+
+    assert result.success is True
+    assert result.re_executed_nodes == ["decision_client", "artifact_client"]
+    assert [call.args[0] for call in request_post.call_args_list] == [
+        "https://executor.example.test/decision",
+        "https://executor.example.test/artifact",
+    ]
+    assert graph_client.get_node("artifact_client")["content"] == "API_VERSION = 'v2'"
+
+
+def test_failed_executor_leaves_node_stale():
+    session_id = "test_failed_execution_session"
+    load_workflow(session_id)
+    graph_client.mark_node_stale("decision_client")
+    previous_hosts = settings.executor_allowed_hosts
+    settings.executor_allowed_hosts = "executor.example.test"
+    try:
+        with patch("backend.app.engine.healer.requests.post", side_effect=RuntimeError("offline")):
+            result = heal_subgraph(session_id)
+    finally:
+        settings.executor_allowed_hosts = previous_hosts
+
+    assert result.success is False
+    assert graph_client.get_node("decision_client")["is_stale"] is True

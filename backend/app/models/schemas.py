@@ -11,6 +11,7 @@ class NodeKind(str, Enum):
     DECISION = "DECISION"
     TOOL_CALL = "TOOL_CALL"
     ARTIFACT = "ARTIFACT"
+    MESSAGE = "MESSAGE"
 
 
 class FactStatus(str, Enum):
@@ -56,6 +57,7 @@ class DecisionNode(BaseGraphNode):
     action_type: str
     rationale: str
     is_stale: bool = False
+    executor_url: Optional[str] = None
 
 
 class AgentNode(BaseGraphNode):
@@ -72,12 +74,22 @@ class EvidenceNode(BaseGraphNode):
     verified: bool = True
 
 
+class MessageNode(BaseGraphNode):
+    kind: NodeKind = NodeKind.MESSAGE
+    user_id: str
+    source_session_id: str
+    message_index: int
+    role: str
+    content: str
+
+
 class ArtifactNode(BaseGraphNode):
     kind: NodeKind = NodeKind.ARTIFACT
     artifact_name: str
     content: str
     artifact_type: str = "code"
     is_stale: bool = False
+    executor_url: Optional[str] = None
 
 
 class ToolCallNode(BaseGraphNode):
@@ -161,12 +173,21 @@ class IngestFactRequest(BaseModel):
     evidence_snippet: Optional[str] = None
 
 
+class IngestAgentRequest(BaseModel):
+    session_id: str = "default"
+    agent_id: str
+    name: str
+    role: str
+    framework: str = "custom"
+
+
 class IngestDecisionRequest(BaseModel):
     session_id: str = "default"
     agent_id: str
     action_type: str
     rationale: str
-    depends_on_fact_ids: List[str] = Field(default_factory=list)
+    depends_on_node_ids: List[str] = Field(default_factory=list)
+    executor_url: str
 
 
 class IngestArtifactRequest(BaseModel):
@@ -174,7 +195,67 @@ class IngestArtifactRequest(BaseModel):
     artifact_name: str
     content: str
     artifact_type: str = "code"
-    decision_id: str
+    depends_on_node_ids: List[str] = Field(default_factory=list)
+    executor_url: str
+
+
+class ConversationMessage(BaseModel):
+    role: str
+    content: str
+    timestamp: Optional[datetime] = None
+
+
+class MemoryClaim(BaseModel):
+    property_name: str
+    property_value: str
+    message_index: int
+    confidence: float = 1.0
+
+
+class IngestConversationRequest(BaseModel):
+    user_id: str
+    session_id: str
+    messages: List[ConversationMessage]
+    memories: List[MemoryClaim] = Field(default_factory=list)
+
+
+class IngestConversationResponse(BaseModel):
+    user_id: str
+    session_id: str
+    messages_ingested: int
+    memories_created: List[str]
+    memories_superseded: List[str]
+
+
+class MemoryQueryRequest(BaseModel):
+    user_id: str
+    question: str
+    include_history: bool = True
+
+
+class MemoryCitation(BaseModel):
+    fact_id: str
+    session_id: str
+    message_index: int
+    quote: str
+    value: str
+    status: str
+    recorded_at: str
+
+
+class MemoryQueryResponse(BaseModel):
+    status: str
+    answer: Optional[str] = None
+    property_name: Optional[str] = None
+    evidence: List[MemoryCitation] = Field(default_factory=list)
+    history: List[MemoryCitation] = Field(default_factory=list)
+
+
+class ExecutorResponse(BaseModel):
+    success: bool
+    rationale: Optional[str] = None
+    content: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AutoHealResponse(BaseModel):

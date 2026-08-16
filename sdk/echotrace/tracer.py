@@ -4,7 +4,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 import requests
 
-from sdk.echotrace.context import (
+from .context import (
     get_current_agent_id,
     get_current_session_id,
     set_current_agent_id,
@@ -38,6 +38,7 @@ class EchoTrace:
                 token_agent = set_current_agent_id(agent_id)
                 token_session = set_current_session_id(self.default_session_id)
                 try:
+                    self._register_agent(agent_id, name, agent_role)
                     return func(*args, **kwargs)
                 finally:
                     reset_current_agent_id(token_agent)
@@ -48,6 +49,7 @@ class EchoTrace:
                 token_agent = set_current_agent_id(agent_id)
                 token_session = set_current_session_id(self.default_session_id)
                 try:
+                    self._register_agent(agent_id, name, agent_role)
                     return await func(*args, **kwargs)
                 finally:
                     reset_current_agent_id(token_agent)
@@ -58,6 +60,20 @@ class EchoTrace:
             return wrapper
 
         return decorator
+
+    def _register_agent(self, agent_id: str, name: str, role: str) -> None:
+        response = requests.post(
+            f"{self.endpoint}/api/ingest/agent",
+            json={
+                "session_id": self.default_session_id,
+                "agent_id": agent_id,
+                "name": name,
+                "role": role,
+                "framework": "custom",
+            },
+            timeout=5,
+        )
+        response.raise_for_status()
 
     def log_fact(
         self,
@@ -96,6 +112,7 @@ class EchoTrace:
         self,
         action_type: str,
         rationale: str,
+        executor_url: str,
         depends_on: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> str:
@@ -110,7 +127,8 @@ class EchoTrace:
             "agent_id": agent_id,
             "action_type": action_type,
             "rationale": rationale,
-            "depends_on_fact_ids": depends_on or [],
+            "depends_on_node_ids": depends_on or [],
+            "executor_url": executor_url,
         }
 
         try:
@@ -125,7 +143,8 @@ class EchoTrace:
         self,
         artifact_name: str,
         content: str,
-        decision_id: str,
+        depends_on: List[str],
+        executor_url: str,
         artifact_type: str = "code",
         session_id: Optional[str] = None,
     ) -> str:
@@ -139,7 +158,8 @@ class EchoTrace:
             "artifact_name": artifact_name,
             "content": content,
             "artifact_type": artifact_type,
-            "decision_id": decision_id,
+            "depends_on_node_ids": depends_on,
+            "executor_url": executor_url,
         }
 
         try:
@@ -149,3 +169,38 @@ class EchoTrace:
         except Exception as exc:
             logger.debug(f"EchoTrace SDK ingestion warning (artifact): {exc}")
         return ""
+
+    def ingest_conversation(
+        self,
+        user_id: str,
+        session_id: str,
+        messages: List[Dict[str, Any]],
+        memories: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        response = requests.post(
+            f"{self.endpoint}/api/memory/conversations",
+            json={
+                "user_id": user_id,
+                "session_id": session_id,
+                "messages": messages,
+                "memories": memories or [],
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def query_memory(
+        self, user_id: str, question: str, include_history: bool = True
+    ) -> Dict[str, Any]:
+        response = requests.post(
+            f"{self.endpoint}/api/memory/query",
+            json={
+                "user_id": user_id,
+                "question": question,
+                "include_history": include_history,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()

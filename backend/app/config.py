@@ -15,5 +15,10 @@ class Settings(BaseModel):
     hydradb_allow_plaintext: bool = os.getenv("HYDRADB_ALLOW_PLAINTEXT", "true").lower() == "true"
     use_in_memory_fallback: bool = os.getenv("USE_IN_MEMORY_FALLBACK", "true").lower() == "true"
 
+    # Agent executor configuration
+    executor_timeout_seconds: float = float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "30"))
+    executor_bearer_token: str = os.getenv("EXECUTOR_BEARER_TOKEN", "")
+    executor_allowed_hosts: str = os.getenv("EXECUTOR_ALLOWED_HOSTS", "")
+
 
 settings = Settings()

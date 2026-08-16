@@ -41,16 +41,16 @@
   --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Cream / Warm Beige Light Theme */
+/* Neutral Light Theme */
 html.theme-light {
-  --bg-canvas: #F8F6F0;
-  --surface-panel: #EFECE3;
-  --surface-elevated: #E5E1D4;
-  --surface-container-low: #F3EFE7;
-  --surface-container-high: #DCD6C7;
-  --surface-container-highest: #D0C9B8;
+  --bg-canvas: #F6F7F9;
+  --surface-panel: #FFFFFF;
+  --surface-elevated: #ECEFF3;
+  --surface-container-low: #F1F3F6;
+  --surface-container-high: #E1E5EA;
+  --surface-container-highest: #D4D9E0;
   
-  --border-subtle: #D8D2C2;
+  --border-subtle: #D7DCE3;
   --border-active: rgba(224, 75, 47, 0.6);
   --border-danger: rgba(211, 23, 61, 0.6);
 

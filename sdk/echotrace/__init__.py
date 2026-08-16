@@ -2,6 +2,7 @@
 EchoTrace Python SDK Package
 """
 
-from sdk.echotrace.tracer import EchoTrace
+from .tracer import EchoTrace
+from sdk.echotrace.registry import agent_registry, AgentHandler
 
-__all__ = ["EchoTrace"]
+__all__ = ["EchoTrace", "agent_registry", "AgentHandler"]

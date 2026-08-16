@@ -2,644 +2,167 @@
 <html class="dark" lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <title>EchoTrace — AI Agent Reliability Infrastructure</title>
-  
-  <!-- Tailwind CSS CDN with configuration -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="EchoTrace is cross-session memory for AI agents: retrieve the current answer, see where it came from, understand what changed, and repair affected work." />
+  <title>EchoTrace - Memory That Explains Itself</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  
-  <!-- Google Fonts & Material Symbols -->
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
-  
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/tokens.css" />
   <link rel="stylesheet" href="/css/style.css" />
-
-  <script id="tailwind-config">
+  <script>
     tailwind.config = {
       darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "bg-canvas": "var(--bg-canvas)",
-            "surface-panel": "var(--surface-panel)",
-            "surface-elevated": "var(--surface-elevated)",
-            "surface-container-low": "var(--surface-container-low)",
-            "surface-container-high": "var(--surface-container-high)",
-            "surface-container-highest": "var(--surface-container-highest)",
-            "border-subtle": "var(--border-subtle)",
-            "text-primary": "var(--text-primary)",
-            "text-secondary": "var(--text-secondary)",
-            "text-muted": "var(--text-muted)",
-            "text-code": "var(--text-code)",
-            "vermilion": "var(--vermilion)",
-            "status-healthy": "var(--status-healthy)",
-            "status-warning": "var(--status-warning)",
-            "agent-blue": "var(--agent-blue)",
-            "decision-purple": "var(--decision-purple)",
-            "evidence-amber": "var(--evidence-amber)"
-          },
-          fontFamily: {
-            sans: ["Inter", "sans-serif"],
-            mono: ["JetBrains Mono", "monospace"]
-          }
-        }
-      }
-    }
+      theme: { extend: {
+        colors: {
+          "bg-canvas": "var(--bg-canvas)", "surface-panel": "var(--surface-panel)",
+          "surface-elevated": "var(--surface-elevated)", "surface-low": "var(--surface-container-low)",
+          "surface-high": "var(--surface-container-high)", "surface-highest": "var(--surface-container-highest)",
+          "border-subtle": "var(--border-subtle)", "text-primary": "var(--text-primary)",
+          "text-secondary": "var(--text-secondary)", "text-muted": "var(--text-muted)",
+          "text-code": "var(--text-code)", vermilion: "var(--vermilion)",
+          "status-healthy": "var(--status-healthy)", "status-warning": "var(--status-warning)",
+          "agent-blue": "var(--agent-blue)", "decision-purple": "var(--decision-purple)",
+          "evidence-amber": "var(--evidence-amber)"
+        },
+        fontFamily: { sans: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] },
+        maxWidth: { workspace: "1440px" }
+      }}
+    };
   </script>
 </head>
-<body class="antialiased min-h-screen flex flex-col bg-bg-canvas text-text-primary text-base sm:text-lg transition-colors duration-300">
-  
-  <!-- TOP NAVIGATION BAR -->
-  <header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 md:px-12 h-20 bg-surface-panel/95 backdrop-blur border-b border-border-subtle">
-    <div class="flex items-center gap-4">
-      <button id="navBrandBtn" class="font-mono text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-3 hover:opacity-90 transition-opacity">
-        <span class="w-3 h-3 rounded-full bg-vermilion inline-block"></span>
-        EchoTrace
+<body class="min-h-screen bg-bg-canvas text-text-primary antialiased">
+  <header class="fixed inset-x-0 top-0 z-50 h-16 border-b border-border-subtle bg-surface-panel/95 backdrop-blur">
+    <div class="mx-auto flex h-full max-w-workspace items-center justify-between px-4 md:px-6">
+      <button id="brandButton" class="flex items-center gap-3 text-left" type="button" aria-label="Go to EchoTrace overview">
+        <span class="grid h-8 w-8 place-items-center rounded border border-vermilion/40 bg-vermilion/10 text-vermilion"><span class="material-symbols-outlined text-lg">hub</span></span>
+        <span><span class="block text-lg font-bold leading-none">EchoTrace</span><span class="hidden font-mono text-[10px] text-text-secondary sm:block">CROSS-SESSION MEMORY</span></span>
       </button>
-    </div>
-    
-    <nav class="hidden lg:flex gap-8 items-center h-full font-mono text-sm md:text-base font-medium" id="navLandingLinks">
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#problem">The Problem</a>
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#how-it-works">How It Works</a>
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#use-cases">Use Cases</a>
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#simulator">Interactive Demo</a>
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#roi">Benchmarks</a>
-      <a class="text-text-secondary hover:text-text-primary transition-colors" href="#sdk">SDK</a>
-    </nav>
-
-    <div class="flex items-center gap-3">
-      <button id="btnThemeToggle" class="p-2.5 rounded bg-surface-elevated hover:bg-surface-container-high text-text-primary component-border transition-colors flex items-center justify-center" title="Toggle Cream Light Theme">
-        <span class="material-symbols-outlined text-lg" id="themeIcon">light_mode</span>
-      </button>
-      <button id="btnToggleStudio" class="bg-vermilion hover:bg-vermilion/90 text-white font-mono text-sm md:text-base font-bold px-5 py-2.5 rounded component-border transition-colors flex items-center gap-2 shadow-lg shadow-vermilion/20">
-        <span class="material-symbols-outlined text-lg" id="toggleStudioIcon">rocket_launch</span>
-        <span id="toggleStudioLabel">Launch App</span>
-      </button>
+      <nav id="landingNav" class="hidden items-center gap-7 font-mono text-xs text-text-secondary lg:flex" aria-label="Overview navigation">
+        <a href="#story" class="transition-colors hover:text-text-primary">THE STORY</a>
+        <a href="#response" class="transition-colors hover:text-text-primary">HOW IT RESPONDS</a>
+        <a href="#outcome" class="transition-colors hover:text-text-primary">THE OUTCOME</a>
+        <a href="#trust" class="transition-colors hover:text-text-primary">WHY IT WORKS</a>
+      </nav>
+      <div class="flex items-center gap-2">
+        <span id="engineStatus" class="hidden font-mono text-[10px] text-text-secondary sm:inline">CHECKING STORAGE</span>
+        <button id="btnThemeToggle" class="grid h-9 w-9 place-items-center rounded border border-border-subtle bg-surface-elevated" title="Toggle theme" type="button"><span id="themeIcon" class="material-symbols-outlined text-lg">light_mode</span></button>
+        <button id="btnLaunchStudio" class="flex items-center gap-2 rounded border border-vermilion/50 bg-vermilion px-4 py-2 font-mono text-xs font-bold text-white transition-opacity hover:opacity-90" type="button"><span class="material-symbols-outlined text-base">account_tree</span><span id="launchLabel">Launch App</span></button>
+      </div>
     </div>
   </header>
 
-  <!-- VIEW 1: DETAILED STORY & PRODUCT HOMEPAGE -->
-  <div id="viewLanding" class="flex-grow pt-28 pb-24 px-6 md:px-12 max-w-7xl mx-auto w-full flex flex-col gap-28">
-    
-    <!-- HERO SECTION -->
-    <section class="flex flex-col items-center text-center mt-6 mb-4 gap-8 max-w-5xl mx-auto">
-      <div class="inline-flex items-center gap-2.5 px-4 py-2 rounded bg-surface-container-high component-border font-mono text-xs sm:text-sm text-text-secondary tracking-widest uppercase font-semibold">
-        <span class="material-symbols-outlined text-base text-vermilion">hub</span>
-        AI AGENT RELIABILITY INFRASTRUCTURE &bull; BUILT ON HYDRADB
+  <div id="scrollProgressBar" aria-hidden="true"></div>
+  <main id="landingView" class="landing-shell mx-auto flex max-w-workspace flex-col px-4 pb-24 pt-24 md:px-6 md:pt-28">
+    <section class="story-hero reveal" data-reveal>
+      <div class="story-hero-copy">
+        <div class="story-eyebrow"><span></span>AI agents act on what they remember</div>
+        <h1>Memory for agents that can answer, <span>“here is why.”</span></h1>
+        <p>AI agents need to remember across conversations, not just retrieve something that looks similar. EchoTrace finds the current answer, shows which session it came from, keeps the older version in context, and tells you when the evidence is not there.</p>
+        <div class="story-actions">
+          <button id="heroLaunchButton" class="primary-action" type="button"><span class="material-symbols-outlined">account_tree</span>See EchoTrace in action</button>
+          <a href="#story" class="secondary-action"><span class="material-symbols-outlined">south</span>Follow the story</a>
+        </div>
       </div>
-      <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-text-primary tracking-tight leading-[1.12]">
-        When one AI agent is wrong,<br /><span class="text-vermilion">your entire system corrupts.</span>
-      </h1>
-      <p class="text-lg sm:text-xl md:text-2xl text-text-secondary max-w-4xl leading-relaxed">
-        EchoTrace maps multi-agent reasoning, decisions, and code into temporal dependency graphs within <strong>HydraDB</strong>. Instantly compute blast radius when assumptions break, and selectively auto-heal contaminated subgraphs without restarting entire workflows.
-      </p>
-      <div class="flex flex-wrap gap-5 justify-center mt-2 font-mono text-sm sm:text-base">
-        <button id="heroLaunchBtn" class="bg-vermilion text-white font-bold px-8 py-4 rounded component-border hover:opacity-90 transition-opacity flex items-center gap-2.5 shadow-xl shadow-vermilion/25">
-          <span class="material-symbols-outlined text-xl">rocket_launch</span>
-          Launch App
-        </button>
-        <a href="#simulator" class="bg-surface-panel text-text-primary font-bold px-8 py-4 rounded component-border hover:bg-surface-elevated transition-colors flex items-center gap-2.5">
-          <span class="material-symbols-outlined text-xl text-vermilion">play_circle</span>
-          Test 10-Second Demo
-        </a>
+      <div class="incident-preview" aria-label="Example of one outdated fact affecting later work">
+        <div class="incident-heading"><span>ACROSS TWO CONVERSATIONS</span><strong>One memory. A clear history.</strong></div>
+        <div class="incident-chain">
+          <div class="incident-node fact-node"><span class="material-symbols-outlined">history</span><div><small>SESSION 04 · EARLIER MEMORY</small><strong>My trip is in June</strong></div><i>REPLACED</i></div>
+          <div class="incident-line"></div>
+          <div class="incident-node"><span class="material-symbols-outlined">update</span><div><small>SESSION 18 · NEWER MEMORY</small><strong>I moved my trip to October</strong></div><i class="current-memory">CURRENT</i></div>
+          <div class="incident-line"></div>
+          <div class="incident-node"><span class="material-symbols-outlined">question_answer</span><div><small>ANSWER WITH PROOF</small><strong>October · cited to session 18</strong></div></div>
+        </div>
+        <div class="incident-scan"><span></span>When the evidence is missing, EchoTrace says so</div>
       </div>
     </section>
 
-    <!-- SECTION 1: THE CORE PROBLEM -->
-    <section id="problem" class="flex flex-col gap-10">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// The Problem</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">The Domino Effect in Multi-Agent Autonomy</h2>
-        <p class="text-text-secondary max-w-3xl text-base sm:text-lg md:text-xl leading-relaxed">
-          In collaborative AI workflows, agents pass facts and assumptions downstream. When an upstream premise is invalidated, standard vector memory has no causal links.
-        </p>
+    <section id="story" class="story-section scroll-mt-24">
+      <div class="story-intro reveal" data-reveal>
+        <div class="section-kicker">THE PROBLEM AND THE SOLUTION, TOGETHER</div>
+        <h2>An agent's memory is only useful when it can explain itself.</h2>
+        <p>Across 30 conversations or one long-running workflow, EchoTrace keeps facts connected to their source and their timeline. The latest answer is easy to retrieve. The reason behind it is never hidden.</p>
       </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="w-12 h-12 rounded bg-status-warning/10 text-status-warning flex items-center justify-center border border-status-warning/30">
-            <span class="material-symbols-outlined text-2xl">error_outline</span>
-          </div>
-          <h3 class="font-mono text-lg sm:text-xl font-bold text-text-primary">1. Cascading Hallucinations</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            If Agent 1 extracts an outdated API version or fake news tweet, Agents 2, 3, and 4 silently generate entire codebases, risk models, and unit tests based on the false premise.
-          </p>
-        </div>
-
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="w-12 h-12 rounded bg-vermilion/10 text-vermilion flex items-center justify-center border border-vermilion/30">
-            <span class="material-symbols-outlined text-2xl">blur_off</span>
-          </div>
-          <h3 class="font-mono text-lg sm:text-xl font-bold text-text-primary">2. The Vector DB Blind Spot</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            Vector embeddings and flat memory stores cannot answer: <em>"Which exact 3 decisions and 2 code files relied on that old fact?"</em> They only match semantic similarity, not causal dependencies.
-          </p>
-        </div>
-
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="w-12 h-12 rounded bg-agent-blue/10 text-agent-blue flex items-center justify-center border border-agent-blue/30">
-            <span class="material-symbols-outlined text-2xl">restart_alt</span>
-          </div>
-          <h3 class="font-mono text-lg sm:text-xl font-bold text-text-primary">3. Costly Full Restarts</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            Developers are forced to throw away the entire multi-agent workflow and restart from scratch—wasting thousands of LLM API tokens and minutes of latency.
-          </p>
-        </div>
+      <div class="paired-story">
+        <article class="paired-row reveal-left" data-reveal>
+          <div class="problem-side"><span class="pair-number">01</span><div><small>THE MEMORY PROBLEM</small><h3>Useful context is spread across sessions.</h3><p>The answer may be in an earlier conversation, buried under dozens of messages and separated from what the agent needs now.</p></div></div>
+          <div class="pair-bridge"><span class="material-symbols-outlined">arrow_forward</span></div>
+          <div class="solution-side"><span class="material-symbols-outlined">link</span><div><small>ECHOTRACE RESPONDS</small><h3>It brings the right memory forward.</h3><p>Ask across sessions and get the active fact with the original session, message, timestamp, and supporting quote.</p></div></div>
+        </article>
+        <article class="paired-row reveal-right" data-reveal>
+          <div class="problem-side"><span class="pair-number">02</span><div><small>THE MEMORY PROBLEM</small><h3>New information quietly replaces old information.</h3><p>“June” becomes “October,” but a flat memory store loses the timeline and cannot explain which answer is current.</p></div></div>
+          <div class="pair-bridge"><span class="material-symbols-outlined">arrow_forward</span></div>
+          <div class="solution-side"><span class="material-symbols-outlined">travel_explore</span><div><small>ECHOTRACE RESPONDS</small><h3>It preserves what changed.</h3><p>The current value answers the question, while the superseded value remains visible as history instead of disappearing.</p></div></div>
+        </article>
+        <article class="paired-row reveal-left" data-reveal>
+          <div class="problem-side"><span class="pair-number">03</span><div><small>THE MEMORY PROBLEM</small><h3>Search returns something plausible, even when it is not enough.</h3><p>When no conversation supports an answer, an agent can fill the gap with confidence instead of telling the truth.</p></div></div>
+          <div class="pair-bridge"><span class="material-symbols-outlined">arrow_forward</span></div>
+          <div class="solution-side"><span class="material-symbols-outlined">auto_fix_high</span><div><small>WITH ECHOTRACE</small><h3>It abstains before it invents.</h3><p>If the graph has no supporting memory, the answer is explicitly marked insufficient instead of being made up.</p></div></div>
+        </article>
       </div>
     </section>
 
-    <!-- SECTION 2: HOW ECHOTRACE WORKS -->
-    <section id="how-it-works" class="flex flex-col gap-10">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// The Solution</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">How EchoTrace Solves It with HydraDB</h2>
-        <p class="text-text-secondary max-w-3xl text-base sm:text-lg md:text-xl leading-relaxed">
-          EchoTrace models agent memory as a deterministic, temporal directed acyclic graph (DAG) in HydraDB over the Bolt 5.x protocol.
-        </p>
+    <section id="response" class="response-section scroll-mt-24">
+      <div class="response-copy reveal-left" data-reveal>
+        <div class="section-kicker">FROM DOUBT TO A CLEAR NEXT STEP</div>
+        <h2>EchoTrace turns “what do I know?” into an answer you can trust.</h2>
+        <p>It does not just retrieve a matching sentence. It compares the timeline, selects the current memory, cites the source conversation, and shows what was superseded. When memory feeds an agent workflow, it can also trace which decisions and outputs need recovery.</p>
+        <blockquote>“Your trip is in October. You said that in session 18. Before that, you had planned June.”</blockquote>
       </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div class="component-border bg-surface-elevated p-8 rounded flex flex-col gap-4">
-          <div class="font-mono text-sm text-agent-blue font-bold tracking-wider">STEP 01</div>
-          <h3 class="text-xl sm:text-2xl font-bold text-text-primary">Deterministic Provenance</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            Every fact is explicitly linked to its evidence URI. Every decision is linked to its supporting facts. Every generated file or action is linked to its parent decision.
-          </p>
-          <div class="mt-auto pt-4 font-mono text-xs sm:text-sm text-text-muted bg-surface-container-high p-3 rounded component-border">
-            <code>(:Agent)-[:PRODUCED]->(:Fact)</code>
-          </div>
-        </div>
-
-        <div class="component-border bg-surface-elevated p-8 rounded flex flex-col gap-4">
-          <div class="font-mono text-sm text-status-warning font-bold tracking-wider">STEP 02</div>
-          <h3 class="text-xl sm:text-2xl font-bold text-text-primary">Instant Blast Radius</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            When an upstream premise is invalidated or superseded, HydraDB executes a multi-hop reverse traversal in &lt; 5ms to identify all corrupted downstream nodes.
-          </p>
-          <div class="mt-auto pt-4 font-mono text-xs sm:text-sm text-text-muted bg-surface-container-high p-3 rounded component-border">
-            <code>MATCH path=(dependent)-[:DEPENDS_ON*]->(fact)</code>
-          </div>
-        </div>
-
-        <div class="component-border bg-surface-elevated p-8 rounded flex flex-col gap-4">
-          <div class="font-mono text-sm text-status-healthy font-bold tracking-wider">STEP 03</div>
-          <h3 class="text-xl sm:text-2xl font-bold text-text-primary">Topological Auto-Healing</h3>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            EchoTrace re-executes <em>only</em> the contaminated subgraph in strict topological dependency order. Unaffected branches remain untouched, saving 50%+ in token costs.
-          </p>
-          <div class="mt-auto pt-4 font-mono text-xs sm:text-sm text-text-muted bg-surface-container-high p-3 rounded component-border">
-            <code>Topological Sort &bull; Healed in 2.0s</code>
-          </div>
-        </div>
+      <div class="response-board reveal-right" data-reveal>
+        <div class="response-board-head"><span>MEMORY QUERY</span><strong>Answer found across sessions</strong></div>
+        <div class="response-item complete"><span class="material-symbols-outlined">find_in_page</span><div><small>CURRENT MEMORY · SESSION 18</small><strong>Trip: October</strong></div><b>CITED</b></div>
+        <div class="response-path"></div>
+        <div class="response-item affected"><span class="material-symbols-outlined">history</span><div><small>SUPERSEDED MEMORY · SESSION 04</small><strong>Trip: June</strong></div><b>HISTORY</b></div>
+        <div class="response-path"></div>
+        <div class="response-item affected"><span class="material-symbols-outlined">block</span><div><small>NO SUPPORTING MEMORY</small><strong>University: no answer invented</strong></div><b>ABSTAIN</b></div>
+        <div class="response-safe"><span class="material-symbols-outlined">verified</span><div><strong>Every answer carries its source</strong><small>Current, historical, or insufficient evidence</small></div></div>
       </div>
     </section>
 
-    <!-- SECTION 3: REAL-WORLD USE CASES -->
-    <section id="use-cases" class="flex flex-col gap-10">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// Real-World Applications</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">Built for Single Agents &amp; Multi-Agent Swarms</h2>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="flex items-center gap-2.5 text-vermilion">
-            <span class="material-symbols-outlined text-2xl">candlestick_chart</span>
-            <span class="font-mono text-sm font-bold uppercase tracking-wider">Trading &amp; Quant Agents</span>
-          </div>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            A bot plans 20 stock positions based on a rumor. When the rumor is debunked, EchoTrace cancels only the 1 bad sell order, leaving the other 19 healthy trades intact.
-          </p>
-        </div>
-
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="flex items-center gap-2.5 text-agent-blue">
-            <span class="material-symbols-outlined text-2xl">terminal</span>
-            <span class="font-mono text-sm font-bold uppercase tracking-wider">Coding &amp; CI/CD Swarms</span>
-          </div>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            When a Payments API is upgraded from v1 to v2, EchoTrace regenerates only the affected client class and unit test file without restarting the planning and design agents.
-          </p>
-        </div>
-
-        <div class="component-border bg-surface-panel p-8 rounded flex flex-col gap-4">
-          <div class="flex items-center gap-2.5 text-decision-purple">
-            <span class="material-symbols-outlined text-2xl">support_agent</span>
-            <span class="font-mono text-sm font-bold uppercase tracking-wider">Customer &amp; Booking Agents</span>
-          </div>
-          <p class="text-text-secondary text-sm sm:text-base leading-relaxed">
-            When a user updates their shipping address mid-conversation, EchoTrace invalidates the old location and updates the invoice without re-asking payment details.
-          </p>
-        </div>
+    <section id="outcome" class="outcome-section scroll-mt-24">
+      <div class="story-intro reveal" data-reveal><div class="section-kicker">WHAT CHANGES FOR YOUR AGENT</div><h2>Less guessing. Better continuity. Honest answers.</h2></div>
+      <div class="outcome-grid">
+        <article class="outcome-item reveal stagger-1" data-reveal><span class="material-symbols-outlined">history</span><strong>Carry context forward</strong><p>Ask across many conversations without losing the original session or message behind a memory.</p></article>
+        <article class="outcome-item reveal stagger-2" data-reveal><span class="material-symbols-outlined">fact_check</span><strong>Know what is current</strong><p>See newer values replace older ones instead of blending contradictory memories together.</p></article>
+        <article class="outcome-item reveal stagger-3" data-reveal><span class="material-symbols-outlined">verified</span><strong>Abstain with confidence</strong><p>When the evidence is not in the history, EchoTrace returns insufficient evidence instead of a guess.</p></article>
       </div>
     </section>
 
-    <!-- SECTION 4: INTERACTIVE DUAL-PANE SIMULATOR WIDGET -->
-    <section id="simulator" class="flex flex-col gap-8">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// Interactive Demonstration</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">Experience Cascade Invalidation &amp; Auto-Heal</h2>
-        <p class="text-text-secondary max-w-3xl text-base sm:text-lg md:text-xl leading-relaxed">
-          Test what happens when Research Agent's premise breaks: watch the blast radius cascade, and click Auto-Heal to repair.
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border-subtle component-border rounded overflow-hidden">
-        <!-- Left: Trace Graph Pipeline Cards -->
-        <div class="bg-surface-panel p-6 sm:p-8 flex flex-col gap-6 relative">
-          <div class="flex justify-between items-center font-mono text-xs sm:text-sm text-text-secondary mb-2">
-            <span>// HYDRADB TRACE GRAPH (4-AGENT SWARM)</span>
-            <span id="simStatusChip" class="px-3 py-1 rounded bg-status-healthy/10 text-status-healthy font-bold">STATUS: HEALTHY</span>
-          </div>
-          <div class="relative pl-12 flex flex-col gap-6">
-            <div class="timeline-line"></div>
-
-            <!-- Step 1: Research Agent -->
-            <div class="timeline-node component-border bg-surface-elevated p-5 rounded w-full relative transition-all" id="node-research">
-              <div class="absolute -left-[40px] top-5 w-7 h-7 rounded-full bg-status-healthy flex items-center justify-center z-10 border-2 border-bg-canvas transition-all" id="status-research">
-                <span class="material-symbols-outlined text-sm text-bg-canvas font-bold">check</span>
-              </div>
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex items-center gap-2.5">
-                  <span class="material-symbols-outlined text-text-secondary text-base">search</span>
-                  <span class="font-mono text-xs sm:text-sm text-agent-blue px-2.5 py-1 bg-surface-container-high rounded font-semibold">01 &bull; Research Agent</span>
-                </div>
-                <span class="font-mono text-xs sm:text-sm text-text-secondary font-medium" id="simFactTag">0ms</span>
-              </div>
-              <div class="text-base sm:text-lg font-bold text-text-primary" id="simFactTitle">PaymentsAPI: Version = v1</div>
-              <div class="text-xs sm:text-sm text-text-secondary mt-1">Extracted from Payments API v1 specification document.</div>
-            </div>
-
-            <!-- Step 2: Planner Agent -->
-            <div class="timeline-node component-border bg-surface-elevated p-5 rounded w-full relative transition-all" id="node-planner">
-              <div class="absolute -left-[40px] top-5 w-7 h-7 rounded-full bg-status-healthy flex items-center justify-center z-10 border-2 border-bg-canvas transition-all" id="status-planner">
-                <span class="material-symbols-outlined text-sm text-bg-canvas font-bold">check</span>
-              </div>
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex items-center gap-2.5">
-                  <span class="material-symbols-outlined text-text-secondary text-base">account_tree</span>
-                  <span class="font-mono text-xs sm:text-sm text-agent-blue px-2.5 py-1 bg-surface-container-high rounded font-semibold">02 &bull; Planner Agent</span>
-                </div>
-                <span class="font-mono text-xs sm:text-sm text-text-secondary font-medium" id="simPlanTag">+142ms</span>
-              </div>
-              <div class="text-base sm:text-lg font-bold text-text-primary">Decision: Adopt API v1 Architecture</div>
-              <div class="text-xs sm:text-sm text-text-secondary mt-1">Generated payment module plan based on v1 premise.</div>
-            </div>
-
-            <!-- Step 3: Coding Agent -->
-            <div class="timeline-node component-border bg-surface-elevated p-5 rounded w-full relative transition-all" id="node-coding">
-              <div class="absolute -left-[40px] top-5 w-7 h-7 rounded-full bg-status-healthy flex items-center justify-center z-10 border-2 border-bg-canvas transition-all" id="status-coding">
-                <span class="material-symbols-outlined text-sm text-bg-canvas font-bold">check</span>
-              </div>
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex items-center gap-2.5">
-                  <span class="material-symbols-outlined text-text-secondary text-base">code</span>
-                  <span class="font-mono text-xs sm:text-sm text-agent-blue px-2.5 py-1 bg-surface-container-high rounded font-semibold">03 &bull; Coding Agent</span>
-                </div>
-                <span class="font-mono text-xs sm:text-sm text-text-secondary font-medium" id="simCodeTag">+850ms</span>
-              </div>
-              <div class="text-base sm:text-lg font-bold text-text-primary">Generated: payments_client.py</div>
-              <div class="text-xs sm:text-sm text-text-secondary mt-1">Wrote client implementation wrapping v1 HTTP endpoints.</div>
-            </div>
-
-            <!-- Step 4: Testing Agent -->
-            <div class="timeline-node component-border bg-surface-elevated p-5 rounded w-full relative transition-all" id="node-testing">
-              <div class="absolute -left-[40px] top-5 w-7 h-7 rounded-full bg-status-healthy flex items-center justify-center z-10 border-2 border-bg-canvas transition-all" id="status-testing">
-                <span class="material-symbols-outlined text-sm text-bg-canvas font-bold">check</span>
-              </div>
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex items-center gap-2.5">
-                  <span class="material-symbols-outlined text-text-secondary text-base">bug_report</span>
-                  <span class="font-mono text-xs sm:text-sm text-agent-blue px-2.5 py-1 bg-surface-container-high rounded font-semibold">04 &bull; Testing Agent</span>
-                </div>
-                <span class="font-mono text-xs sm:text-sm text-text-secondary font-medium" id="simTestTag">+1200ms</span>
-              </div>
-              <div class="text-base sm:text-lg font-bold text-text-primary">Generated: test_payments.py</div>
-              <div class="text-xs sm:text-sm text-text-secondary mt-1">Passed mock test assertions for v1 charges endpoint.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Code Artifact & Trigger Controls -->
-        <div class="bg-bg-canvas p-0 flex flex-col h-full relative">
-          <div class="flex items-center justify-between p-5 border-b border-border-subtle bg-surface-panel">
-            <div class="font-mono text-sm sm:text-base text-text-primary font-bold flex items-center gap-2.5">
-              <span class="material-symbols-outlined text-base text-text-secondary">description</span>
-              <span id="simResultHeading">payments_client.py</span>
-            </div>
-            <div class="flex gap-3">
-              <button id="btnSimBreak" class="bg-surface-container-high hover:bg-status-warning/20 text-status-warning font-mono text-xs sm:text-sm font-bold px-4 py-2 rounded component-border transition-colors flex items-center gap-2">
-                <span class="material-symbols-outlined text-base">warning</span>
-                1. Invalidate Fact
-              </button>
-              <button id="btnSimHeal" class="bg-surface-container-high text-status-healthy font-mono text-xs sm:text-sm font-bold px-4 py-2 rounded component-border transition-colors flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>
-                <span class="material-symbols-outlined text-base">healing</span>
-                2. Auto-Heal Subgraph
-              </button>
-            </div>
-          </div>
-          
-          <div class="p-6 font-mono text-xs sm:text-sm md:text-base text-text-code overflow-x-auto flex-grow bg-bg-canvas leading-relaxed" id="code-content">
-            <pre><code id="simCodePreview">import requests
-from sdk.echotrace import EchoTrace
-
-tracer = EchoTrace(session_id="production_checkout")
-
-@tracer.agent(name="IntegrationCoder", role="Software Engineer")
-class PaymentsClient:
-    def __init__(self, api_key: str):
-        # NOTE: Configured according to research fact: version = v1
-        self.base_url = "https://api.payments-corp.com/v1"
-        self.headers = {"Authorization": f"Bearer {api_key}"}
-
-    def charge(self, amount: int, currency: str = "USD"):
-        url = f"{self.base_url}/charges"
-        payload = {"amount": amount, "currency": currency}
-        return requests.post(url, json=payload, headers=self.headers)</code></pre>
-          </div>
-          
-          <div class="p-5 border-t border-border-subtle bg-surface-panel font-mono text-xs sm:text-sm text-text-secondary leading-relaxed" id="simDiagnosisText">
-            All 4 agents are operating in deterministic harmony. No corrupted nodes or contradictions detected in HydraDB.
-          </div>
-        </div>
-      </div>
+    <section id="trust" class="trust-section scroll-mt-24 reveal-scale" data-reveal>
+      <div class="trust-copy"><div class="section-kicker">WHY THE ANSWER IS RELIABLE</div><h2>Built on relationships, not best guesses.</h2><p>EchoTrace uses HydraDB to store the real connections between messages, memories, evidence, decisions, and outputs. That graph preserves time, source, and dependency across sessions. Traditional search can tell you what looks related. EchoTrace tells you what is current, what changed, and what the answer rests on.</p><a href="/docs">Explore the technical details <span class="material-symbols-outlined">arrow_outward</span></a></div>
+      <div class="trust-comparison"><div><small>SEARCH ALONE</small><strong>“I found something similar.”</strong><span>Useful for discovery</span></div><div class="trust-divider">VS</div><div><small>ECHOTRACE + HYDRADB</small><strong>“This is current, and here is the source.”</strong><span>Reliable for memory</span></div></div>
     </section>
 
-    <!-- SECTION 5: BENCHMARKS & ROI -->
-    <section id="roi" class="flex flex-col gap-8">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// Quantitative Results</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">Performance &amp; ROI Impact Analysis</h2>
-      </div>
-
-      <div class="overflow-x-auto custom-scrollbar border border-border-subtle rounded bg-surface-panel">
-        <table class="w-full text-left border-collapse font-mono text-xs sm:text-sm md:text-base">
-          <thead>
-            <tr class="border-b border-border-subtle bg-surface-container-low text-text-secondary">
-              <th class="p-5 font-bold uppercase tracking-wider">Benchmark Metric</th>
-              <th class="p-5 font-bold uppercase tracking-wider border-l border-border-subtle">Full Pipeline Restart</th>
-              <th class="p-5 font-bold uppercase tracking-wider border-l border-border-subtle text-vermilion">EchoTrace Selective Auto-Heal</th>
-            </tr>
-          </thead>
-          <tbody class="text-text-primary">
-            <tr class="border-b border-border-subtle hover:bg-surface-elevated transition-colors">
-              <td class="p-5 font-medium">Re-Executed Nodes</td>
-              <td class="p-5 border-l border-border-subtle text-text-secondary">49 / 49 nodes (100%)</td>
-              <td class="p-5 border-l border-border-subtle text-status-healthy font-bold">24 / 49 nodes (49%)</td>
-            </tr>
-            <tr class="border-b border-border-subtle hover:bg-surface-elevated transition-colors">
-              <td class="p-5 font-medium">LLM Token Consumption</td>
-              <td class="p-5 border-l border-border-subtle text-text-secondary">58,800 tokens</td>
-              <td class="p-5 border-l border-border-subtle text-status-healthy font-bold">28,800 tokens (51.0% Token Cost Reduction)</td>
-            </tr>
-            <tr class="border-b border-border-subtle hover:bg-surface-elevated transition-colors">
-              <td class="p-5 font-medium">Latency to Recovery</td>
-              <td class="p-5 border-l border-border-subtle text-text-secondary">41.65s</td>
-              <td class="p-5 border-l border-border-subtle text-status-healthy font-bold">20.40s (2.0x Faster Recovery)</td>
-            </tr>
-            <tr class="hover:bg-surface-elevated transition-colors">
-              <td class="p-5 font-medium">HydraDB Graph Traversal Overhead</td>
-              <td class="p-5 border-l border-border-subtle text-text-secondary">-</td>
-              <td class="p-5 border-l border-border-subtle text-status-healthy font-bold">3.49 ms (Sub-5ms Blast Radius)</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <section class="closing-section reveal" data-reveal>
+      <div><div class="section-kicker">MAKE AGENT MEMORY EXPLAINABLE</div><h2>Ask across sessions. Get the current answer. See the proof.</h2></div>
+      <button id="btnViewLiveGraph" class="primary-action" type="button"><span class="material-symbols-outlined">account_tree</span>Open the memory graph</button>
     </section>
+  </main>
 
-    <!-- SECTION 6: SDK INTEGRATION -->
-    <section id="sdk" class="flex flex-col gap-8">
-      <div class="flex flex-col gap-3">
-        <span class="font-mono text-sm text-vermilion uppercase font-bold tracking-wider">// Developer Quickstart</span>
-        <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary tracking-tight">Zero-Config Python SDK</h2>
-      </div>
-
-      <div class="bg-surface-panel component-border rounded overflow-hidden">
-        <div class="px-6 py-4 border-b border-border-subtle bg-surface-container-low flex items-center gap-3 font-mono text-sm sm:text-base text-text-secondary">
-          <span class="material-symbols-outlined text-base">terminal</span>
-          pip install echotrace-sdk
-        </div>
-        <div class="p-8 font-mono text-xs sm:text-sm md:text-base text-text-code bg-bg-canvas overflow-x-auto leading-relaxed">
-          <pre><code>from sdk.echotrace import EchoTrace
-
-# Initialize tracer with session identifier
-tracer = EchoTrace(endpoint="http://localhost:8000", session_id="production_team")
-
-# Decorate existing agent functions to map causal dependencies in HydraDB
-@tracer.agent(name="ResearchAgent", role="API Analyst")
-def analyze_api_spec(doc_url: str):
-    fact_id = tracer.log_fact(
-        entity="PaymentsAPI",
-        property_name="version",
-        property_value="v2",
-        evidence_source=doc_url
-    )
-    return fact_id
-
-@tracer.agent(name="ArchitecturePlanner", role="System Architect")
-def plan_payment_module(fact_id: str):
-    decision_id = tracer.log_decision(
-        action_type="ArchitectureSelection",
-        rationale="Adopt PaymentsAPI v2 endpoint contracts",
-        depends_on=[fact_id]
-    )
-    return decision_id</code></pre>
-        </div>
-      </div>
+  <main id="studioView" class="mx-auto hidden max-w-workspace flex-col gap-5 px-4 pb-16 pt-24 md:px-6">
+    <section class="flex flex-col justify-between gap-4 border-b border-border-subtle pb-5 md:flex-row md:items-end">
+      <div><button id="btnBackOverview" class="mb-3 flex items-center gap-1 font-mono text-xs text-text-secondary hover:text-text-primary" type="button"><span class="material-symbols-outlined text-base">arrow_back</span>BACK TO OVERVIEW</button><div class="section-kicker">LIVE HYDRADB WORKSPACE</div><h1 class="mt-1 text-2xl font-bold md:text-3xl">Cross-session memory graph</h1></div>
+      <div class="flex w-full flex-col gap-2 sm:flex-row md:w-auto"><button id="btnLoadDemo" class="flex items-center justify-center gap-2 rounded border border-vermilion/50 bg-vermilion/10 px-4 py-2 font-mono text-xs font-bold text-vermilion" type="button"><span class="material-symbols-outlined text-base">movie</span>Load demo story</button><form id="sessionForm" class="flex min-w-0 gap-2 font-mono text-sm"><label class="sr-only" for="sessionInput">Session ID</label><input id="sessionInput" value="default" required class="min-w-0 flex-1 rounded border-border-subtle bg-surface-panel text-text-primary md:w-56" placeholder="Session ID" /><button class="rounded bg-vermilion px-4 py-2 font-bold text-white" type="submit">Load</button></form></div>
     </section>
-  </div>
+    <div id="operationMessage" class="hidden rounded border px-4 py-3 font-mono text-sm"></div>
+    <section class="grid grid-cols-2 gap-px overflow-hidden rounded border border-border-subtle bg-border-subtle font-mono md:grid-cols-5">
+      <div class="metric-card"><div class="flex items-center gap-2"><span id="healthIndicator" class="h-2 w-2 rounded-full"></span><div id="healthScoreDisplay" class="text-2xl font-bold">-</div></div><div>MEMORY HEALTH</div></div>
+      <div class="metric-card"><div id="statActiveFacts" class="text-2xl font-bold">-</div><div>ACTIVE FACTS</div></div>
+      <div class="metric-card"><div id="statStaleDecisions" class="text-2xl font-bold">-</div><div>STALE NODES</div></div>
+      <div class="metric-card"><div id="statContradictions" class="text-2xl font-bold">-</div><div>CONFLICTS</div></div>
+      <div class="metric-card col-span-2 md:col-span-1"><div id="statSuperseded" class="text-2xl font-bold">-</div><div>SUPERSEDED</div></div>
+    </section>
+    <section class="grid min-h-[680px] grid-cols-1 gap-px overflow-hidden rounded border border-border-subtle bg-border-subtle lg:grid-cols-12">
+      <aside class="flex flex-col gap-4 bg-surface-panel p-5 lg:col-span-3"><div><div class="panel-title"><span class="material-symbols-outlined">monitor_heart</span>MEMORY HEALTH</div><p class="mt-2 text-xs leading-5 text-text-secondary">Contradictions and remediation controls for the loaded session.</p></div><div id="contradictionContainer" class="flex flex-col gap-3"></div><div class="mt-auto flex flex-col gap-2 font-mono text-xs"><button id="btnTriggerInvalidate" class="flex items-center justify-center gap-2 rounded border border-status-warning/50 bg-status-warning/10 py-3 font-bold text-status-warning" type="button"><span class="material-symbols-outlined text-base">warning</span>Invalidate selected fact</button><button id="btnAutoHeal" class="flex items-center justify-center gap-2 rounded border border-status-healthy/50 bg-status-healthy/10 py-3 font-bold text-status-healthy" type="button"><span class="material-symbols-outlined text-base">play_arrow</span>Execute stale subgraph</button></div></aside>
+      <div class="relative min-h-[560px] bg-bg-canvas lg:col-span-6"><div class="pointer-events-none absolute left-4 top-4 z-10 flex flex-wrap gap-3 rounded border border-border-subtle bg-surface-panel/90 px-3 py-2 font-mono text-[10px] text-text-secondary"><span><i class="legend-dot bg-evidence-amber"></i>MESSAGE</span><span><i class="legend-dot bg-status-healthy"></i>MEMORY</span><span><i class="legend-dot bg-agent-blue"></i>AGENT</span><span><i class="legend-dot bg-decision-purple"></i>DECISION</span><span><i class="legend-dot bg-vermilion"></i>OUTPUT</span></div><div id="emptyGraphState" class="pointer-events-none absolute inset-0 z-[1] hidden place-items-center p-8 text-center"><div><span class="material-symbols-outlined text-4xl text-text-muted">account_tree</span><p class="mt-3 font-mono text-sm font-bold">No graph nodes in this session</p><p class="mt-2 max-w-sm text-xs leading-5 text-text-secondary">Load the demo story or a session populated through the SDK.</p></div></div><canvas id="studioGraphCanvas" class="h-full w-full" aria-label="Interactive cross-session memory graph"></canvas></div>
+      <aside class="flex flex-col gap-5 bg-surface-panel p-5 font-mono text-xs lg:col-span-3"><div class="panel-title"><span class="material-symbols-outlined">data_object</span>NODE INSPECTOR</div><div class="inspector-field"><span>ID</span><div id="inspNodeId" class="break-all">Select a node</div></div><div class="grid grid-cols-2 gap-3"><div class="inspector-field"><span>KIND</span><div id="inspKind">-</div></div><div class="inspector-field"><span>STATUS</span><div id="inspStatus">-</div></div></div><div class="inspector-field"><span>LABEL</span><div id="inspLabel">-</div></div><div id="inspEvidenceWrap" class="inspector-field hidden"><span>EVIDENCE</span><div id="inspEvidence" class="break-all text-agent-blue"></div></div><div id="inspCodeBlockWrap" class="inspector-field hidden"><span>CONTENT</span><pre id="inspCodeBlock" class="custom-scrollbar mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded border border-border-subtle bg-bg-canvas p-3 text-text-code"></pre></div></aside>
+    </section>
+    <section class="rounded border border-border-subtle bg-surface-panel p-4 font-mono text-xs"><div class="mb-3 flex flex-wrap justify-between gap-2"><span>HISTORICAL MEMORY SNAPSHOT</span><span id="sliderTimeDisplay" class="font-bold text-vermilion">CURRENT</span></div><div class="flex items-center gap-4"><input id="timeTravelSlider" type="range" min="0" max="100" value="100" class="min-w-0 flex-1 accent-vermilion" /><button id="btnTimeTravelReset" class="rounded border border-border-subtle bg-surface-elevated px-3 py-2" type="button">Present</button></div></section>
+  </main>
 
-  <!-- VIEW 2: DEDICATED INTERACTIVE DEBUGGER STUDIO COCKPIT -->
-  <div id="viewStudio" class="hidden flex-grow pt-24 pb-16 px-6 md:px-12 max-w-7xl mx-auto w-full flex-col gap-8">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border-subtle pb-6">
-      <div>
-        <div class="flex items-center gap-2">
-          <button id="btnBackToLanding" class="text-text-secondary hover:text-text-primary flex items-center gap-1.5 font-mono text-sm sm:text-base font-semibold">
-            <span class="material-symbols-outlined text-base">arrow_back</span>
-            Back to Overview
-          </button>
-          <span class="text-border-subtle">/</span>
-          <span class="font-mono text-sm sm:text-base text-vermilion font-bold">Live Cockpit</span>
-        </div>
-        <h2 class="text-3xl sm:text-4xl font-extrabold font-mono text-text-primary mt-2">Interactive Debugger Studio</h2>
-        <p class="text-sm sm:text-base text-text-secondary font-mono mt-1">HydraDB Topological DAG &bull; Session: <span id="currentSessionLabel" class="text-vermilion font-bold">api_deprecation_demo</span></p>
-      </div>
-      
-      <div class="flex flex-wrap gap-3 font-mono text-xs sm:text-sm">
-        <button id="btnScenarioDeprecate" class="px-4 py-2.5 rounded bg-surface-panel hover:bg-surface-elevated component-border text-text-secondary hover:text-text-primary font-semibold transition-colors">
-          Scenario: API Deprecation
-        </button>
-        <button id="btnScenarioContradict" class="px-4 py-2.5 rounded bg-surface-panel hover:bg-surface-elevated component-border text-text-secondary hover:text-text-primary font-semibold transition-colors">
-          Scenario: Contradiction
-        </button>
-        <button id="btnRunFullSim" class="px-4 py-2.5 rounded bg-surface-panel hover:bg-surface-elevated component-border text-vermilion hover:text-white font-bold transition-colors">
-          Run Full Sim
-        </button>
-        <button id="btnResetGraph" class="px-4 py-2.5 rounded bg-surface-panel hover:bg-surface-elevated component-border text-text-secondary hover:text-text-primary font-semibold transition-colors">
-          Reset Graph
-        </button>
-      </div>
-    </div>
-
-    <!-- 3-Column Studio Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-px bg-border-subtle component-border rounded overflow-hidden bg-surface-panel shadow-2xl">
-      
-      <!-- Left Panel: Memory Health & Controls (3 cols) -->
-      <div class="lg:col-span-3 bg-surface-panel p-6 flex flex-col gap-6 border-b lg:border-b-0 lg:border-r border-border-subtle">
-        <div class="component-border bg-surface-elevated p-5 rounded flex items-center justify-between">
-          <div>
-            <div class="font-mono text-3xl font-black text-status-healthy" id="healthScoreDisplay">100%</div>
-            <div class="font-mono text-xs text-text-secondary uppercase font-bold mt-1">System Memory Health</div>
-          </div>
-          <div id="healthIndicator" class="w-4 h-4 rounded-full bg-status-healthy"></div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3 font-mono text-xs sm:text-sm">
-          <div class="component-border bg-surface-elevated p-4 rounded">
-            <div class="text-xl font-black text-text-primary" id="statActiveFacts">0</div>
-            <div class="text-text-secondary text-xs uppercase font-bold mt-1">Active Facts</div>
-          </div>
-          <div class="component-border bg-surface-elevated p-4 rounded">
-            <div class="text-xl font-black text-status-warning" id="statStaleDecisions">0</div>
-            <div class="text-text-secondary text-xs uppercase font-bold mt-1">Stale Nodes</div>
-          </div>
-          <div class="component-border bg-surface-elevated p-4 rounded">
-            <div class="text-xl font-black text-text-primary" id="statContradictions">0</div>
-            <div class="text-text-secondary text-xs uppercase font-bold mt-1">Conflicts</div>
-          </div>
-          <div class="component-border bg-surface-elevated p-4 rounded">
-            <div class="text-xl font-black text-text-primary" id="statSuperseded">0</div>
-            <div class="text-text-secondary text-xs uppercase font-bold mt-1">Superseded</div>
-          </div>
-        </div>
-
-        <div id="contradictionContainer" class="flex flex-col gap-3"></div>
-
-        <div class="mt-auto flex flex-col gap-3 pt-6 font-mono text-xs sm:text-sm">
-          <button id="btnTriggerInvalidate" class="w-full bg-status-warning/10 hover:bg-status-warning/20 text-status-warning border border-status-warning/40 font-bold py-3 px-4 rounded transition-colors flex items-center justify-center gap-2">
-            <span class="material-symbols-outlined text-base">warning</span>
-            Invalidate Selected Fact
-          </button>
-          <button id="btnAutoHeal" class="w-full bg-status-healthy/10 hover:bg-status-healthy/20 text-status-healthy border border-status-healthy/40 font-bold py-3 px-4 rounded transition-colors flex items-center justify-center gap-2 opacity-50 cursor-not-allowed" disabled>
-            <span class="material-symbols-outlined text-base">healing</span>
-            Auto-Heal Subgraph
-          </button>
-        </div>
-      </div>
-
-      <!-- Center Panel: Canvas DAG Visualizer (6 cols) -->
-      <div class="lg:col-span-6 bg-bg-canvas relative min-h-[580px] flex flex-col">
-        <div class="absolute top-4 left-4 bg-surface-panel/90 backdrop-blur component-border rounded px-4 py-2 flex flex-wrap gap-4 font-mono text-xs sm:text-sm text-text-secondary z-10 font-semibold">
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-agent-blue"></span>Agent</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-status-healthy"></span>Fact</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-decision-purple"></span>Decision</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-vermilion"></span>Artifact</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-status-warning"></span>Stale / Corrupted</div>
-        </div>
-        <canvas id="studioGraphCanvas" class="w-full h-full flex-grow"></canvas>
-      </div>
-
-      <!-- Right Panel: Node Inspector (3 cols) -->
-      <div class="lg:col-span-3 bg-surface-panel p-6 flex flex-col gap-5 border-t lg:border-t-0 lg:border-l border-border-subtle font-mono text-xs sm:text-sm">
-        <div class="text-text-primary font-bold text-sm sm:text-base uppercase border-b border-border-subtle pb-3 flex items-center gap-2">
-          <span class="material-symbols-outlined text-base text-vermilion">info</span>
-          Node Inspector
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <span class="text-text-secondary text-xs uppercase font-bold">Node ID</span>
-          <span class="text-text-primary bg-surface-elevated px-3 py-1.5 rounded component-border break-all" id="inspNodeId">Click any node to inspect</span>
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <span class="text-text-secondary text-xs uppercase font-bold">Kind / Type</span>
-          <span class="text-text-primary font-semibold" id="inspKind">-</span>
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <span class="text-text-secondary text-xs uppercase font-bold">Label</span>
-          <span class="text-text-primary font-semibold" id="inspLabel">-</span>
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <span class="text-text-secondary text-xs uppercase font-bold">Status</span>
-          <span class="text-text-primary font-bold" id="inspStatus">-</span>
-        </div>
-        <div class="flex flex-col gap-1.5" id="inspEvidenceWrap" style="display: none;">
-          <span class="text-text-secondary text-xs uppercase font-bold">Evidence Source</span>
-          <span class="text-agent-blue break-all" id="inspEvidence">-</span>
-        </div>
-        <div class="flex flex-col gap-1.5" id="inspCodeBlockWrap" style="display: none;">
-          <span class="text-text-secondary text-xs uppercase font-bold">Content / Code</span>
-          <div class="bg-bg-canvas p-3 rounded component-border text-text-code text-xs overflow-x-auto whitespace-pre max-h-52 leading-relaxed" id="inspCodeBlock"></div>
-        </div>
-      </div>
-
-      <!-- Bottom Scrubber: Time-Travel (12 cols full width) -->
-      <div class="lg:col-span-12 bg-surface-elevated p-5 border-t border-border-subtle flex flex-col md:flex-row items-center justify-between gap-5 font-mono text-xs sm:text-sm">
-        <div class="flex-grow w-full flex flex-col gap-2">
-          <div class="flex justify-between text-text-secondary text-xs sm:text-sm font-semibold">
-            <span>TIME-TRAVEL HISTORICAL MEMORY SCRUBBER</span>
-            <span id="sliderTimeDisplay" class="text-vermilion font-bold">SNAPSHOT: CURRENT (LIVE)</span>
-          </div>
-          <input type="range" min="0" max="100" value="100" class="w-full accent-vermilion cursor-pointer" id="timeTravelSlider" />
-        </div>
-        <button id="btnTimeTravelReset" class="px-5 py-2.5 rounded bg-surface-panel hover:bg-surface-elevated component-border text-text-primary text-xs sm:text-sm font-bold whitespace-nowrap transition-colors">
-          Jump to Present
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- FOOTER -->
-  <footer class="w-full py-8 px-6 md:px-12 flex flex-col md:flex-row justify-between items-center bg-bg-canvas border-t border-border-subtle mt-auto font-mono text-sm text-text-secondary gap-4">
-    <div>
-      &copy; 2026 EchoTrace &bull; Built for Hack Hydra 2026 with HydraDB.
-    </div>
-    <div class="flex gap-8 font-medium">
-      <a class="hover:text-vermilion transition-colors" href="#problem">Problem</a>
-      <a class="hover:text-vermilion transition-colors" href="#how-it-works">Architecture</a>
-      <a class="hover:text-vermilion transition-colors" href="#roi">Benchmarks</a>
-      <a class="hover:text-vermilion transition-colors" href="https://github.com/hydra-db/hydradb" target="_blank" rel="noreferrer">HydraDB GitHub</a>
-    </div>
-  </footer>
-
-  <!-- INVALIDATE FACT MODAL DIALOG -->
-  <div class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 p-4" id="invalidateModal">
-    <div class="bg-surface-panel border border-border-subtle rounded max-w-md w-full p-6 flex flex-col gap-4 font-mono text-xs sm:text-sm">
-      <div class="text-sm sm:text-base font-bold text-text-primary uppercase flex items-center gap-2">
-        <span class="material-symbols-outlined text-status-warning text-lg">warning</span>
-        Invalidate &amp; Supersede Fact
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label class="text-text-secondary text-xs uppercase font-bold">Target Fact ID</label>
-        <input type="text" id="modalFactId" class="bg-bg-canvas border border-border-subtle rounded px-3.5 py-2.5 text-text-primary outline-none" readonly />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label class="text-text-secondary text-xs uppercase font-bold">Reason for Invalidation</label>
-        <input type="text" id="modalReason" class="bg-bg-canvas border border-border-subtle rounded px-3.5 py-2.5 text-text-primary outline-none focus:border-vermilion" placeholder="e.g. Official deprecation notice received" />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label class="text-text-secondary text-xs uppercase font-bold">Replacement Value</label>
-        <input type="text" id="modalReplacement" class="bg-bg-canvas border border-border-subtle rounded px-3.5 py-2.5 text-text-primary outline-none focus:border-vermilion" placeholder="e.g. v2" />
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label class="text-text-secondary text-xs uppercase font-bold">Evidence Source URI</label>
-        <input type="text" id="modalEvidence" class="bg-bg-canvas border border-border-subtle rounded px-3.5 py-2.5 text-text-primary outline-none focus:border-vermilion" placeholder="e.g. https://docs.payments.com/v2" />
-      </div>
-      <div class="flex justify-end gap-3 mt-3">
-        <button id="btnModalCancel" class="px-5 py-2.5 rounded bg-surface-elevated hover:bg-surface-container-high text-text-primary font-semibold transition-colors">
-          Cancel
-        </button>
-        <button id="btnModalConfirm" class="px-5 py-2.5 rounded bg-status-warning text-white font-bold hover:opacity-90 transition-opacity">
-          Invalidate &amp; Trace Blast Radius
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- JAVASCRIPT CONTROLLERS -->
-  <script src="/js/api.js"></script>
-  <script src="/js/graph-visualizer.js"></script>
-  <script src="/js/timeline.js"></script>
-  <script src="/js/health-monitor.js"></script>
-  <script src="/js/app.js"></script>
+  <footer id="siteFooter" class="mt-auto border-t border-border-subtle px-4 py-7 md:px-6"><div class="mx-auto flex max-w-workspace flex-col justify-between gap-3 font-mono text-[11px] text-text-secondary sm:flex-row"><span>EchoTrace / temporal provenance for agent memory</span><span>Built on HydraDB</span></div></footer>
+  <dialog id="invalidateModal" class="w-[min(92vw,480px)] rounded border border-border-subtle bg-surface-panel p-0 text-text-primary shadow-2xl backdrop:bg-black/75"><form id="invalidateForm" class="flex flex-col gap-4 p-6 font-mono text-xs"><div class="flex items-center gap-2 border-b border-border-subtle pb-4 text-sm font-bold"><span class="material-symbols-outlined text-status-warning">warning</span>INVALIDATE AND SUPERSEDE FACT</div><label class="form-field">FACT ID<input id="modalFactId" readonly /></label><label class="form-field">REASON<input id="modalReason" required placeholder="Official source reports a changed value" /></label><label class="form-field">REPLACEMENT VALUE<input id="modalReplacement" placeholder="Optional" /></label><label class="form-field">EVIDENCE URL<input id="modalEvidence" type="url" placeholder="Optional" /></label><div class="mt-2 flex justify-end gap-2"><button id="btnModalCancel" type="button" class="rounded px-4 py-2 text-text-secondary">Cancel</button><button class="rounded bg-status-warning px-4 py-2 font-bold text-white">Invalidate fact</button></div></form></dialog>
+  <script src="/js/api.js"></script><script src="/js/graph-visualizer.js"></script><script src="/js/timeline.js"></script><script src="/js/health-monitor.js"></script><script src="/js/app.js"></script>
 </body>
 </html>

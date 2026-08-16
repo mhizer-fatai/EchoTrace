@@ -17,7 +17,6 @@ COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY sdk/ ./sdk/
 COPY run.py .
-COPY benchmark.py .
 
 # Install SDK locally in editable mode
 RUN pip install --no-cache-dir -e ./sdk

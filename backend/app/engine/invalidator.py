@@ -68,7 +68,7 @@ def invalidate_fact(
         # If evidence was provided, link evidence
         if request.evidence_uri:
             ev_id = f"ev_{uuid.uuid4().hex[:8]}"
-            graph_client.in_memory.add_node(
+            graph_client.add_node(
                 {
                     "id": ev_id,
                     "kind": NodeKind.EVIDENCE.value,

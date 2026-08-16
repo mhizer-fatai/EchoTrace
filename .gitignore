@@ -33,7 +33,11 @@ htmlcov/
 .mypy_cache/
 
 # Databases & Local data
-hydradb-data/
+hydradb-data/store/*
+!hydradb-data/store/.gitkeep
+hydradb-data/cache/*
+!hydradb-data/cache/.gitkeep
+hydradb-data/auth-token
 *.sqlite3
 *.db
 *.log
@@ -42,6 +46,7 @@ hydradb-data/
 .env
 .env.local
 .env.*.local
+opencode.json
 
 # IDE & OS
 .vscode/

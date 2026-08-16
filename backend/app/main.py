@@ -8,25 +8,31 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.config import settings
-from backend.app.demo.multi_agent_sim import MultiAgentWorkflowSimulator
-from backend.app.demo.scenarios import load_api_deprecation_scenario, load_contradiction_scenario
 from backend.app.engine.blast_radius import calculate_blast_radius
 from backend.app.engine.contradiction import generate_memory_health_report
+from backend.app.engine.demo import seed_track_three_demo
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
+from backend.app.engine.memory import ingest_conversation, query_memory
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
     AutoHealResponse,
+    AgentNode,
     BlastRadiusReport,
     FactNode,
     DecisionNode,
     ArtifactNode,
     EdgeType,
     GraphEdge,
+    IngestAgentRequest,
     IngestArtifactRequest,
     IngestDecisionRequest,
     IngestFactRequest,
     InvalidateFactRequest,
+    IngestConversationRequest,
+    IngestConversationResponse,
+    MemoryQueryRequest,
+    MemoryQueryResponse,
     MemoryHealthReport,
 )
 
@@ -54,9 +60,6 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    # Pre-populate default demonstration session
-    load_api_deprecation_scenario("default")
-    logger.info("Default demonstration graph loaded successfully.")
 
 
 # API Endpoints
@@ -118,28 +121,41 @@ def get_memory_health(session_id: str):
     return generate_memory_health_report(session_id=session_id)
 
 
-@app.post("/api/demo/load-scenario")
-def post_load_scenario(
-    scenario_type: str = Query("api_deprecation", enum=["api_deprecation", "contradiction", "empty"]),
-    session_id: str = Query("default"),
-) -> Dict[str, Any]:
-    if scenario_type == "api_deprecation":
-        return load_api_deprecation_scenario(session_id)
-    elif scenario_type == "contradiction":
-        return load_contradiction_scenario(session_id)
-    elif scenario_type == "empty":
-        graph_client.clear_session(session_id)
-        return {"nodes": [], "edges": []}
-    raise HTTPException(status_code=400, detail="Unknown scenario type.")
+@app.post("/api/memory/conversations", response_model=IngestConversationResponse)
+def post_ingest_conversation(request: IngestConversationRequest) -> IngestConversationResponse:
+    try:
+        return ingest_conversation(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/api/demo/run-sim")
-def post_run_simulation(session_id: str = "live_simulation") -> Dict[str, Any]:
-    sim = MultiAgentWorkflowSimulator(session_id=session_id)
-    return sim.run_full_lifecycle()
+@app.post("/api/memory/query", response_model=MemoryQueryResponse)
+def post_query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
+    return query_memory(request)
+
+
+@app.post("/api/demo/track-three")
+def post_seed_track_three_demo() -> Dict[str, Any]:
+    return seed_track_three_demo()
 
 
 # SDK Ingestion Endpoints
+
+@app.post("/api/ingest/agent")
+def post_ingest_agent(req: IngestAgentRequest) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    graph_client.add_node(AgentNode(
+        id=req.agent_id,
+        label=req.name,
+        agent_name=req.name,
+        role=req.role,
+        framework=req.framework,
+        session_id=req.session_id,
+        created_at=now,
+        valid_from=now,
+    ))
+    return {"status": "registered", "agent_id": req.agent_id}
+
 
 @app.post("/api/ingest/fact")
 def post_ingest_fact(req: IngestFactRequest) -> Dict[str, Any]:
@@ -159,6 +175,26 @@ def post_ingest_fact(req: IngestFactRequest) -> Dict[str, Any]:
         valid_from=now,
     )
     graph_client.add_node(fact)
+
+    if req.evidence_source:
+        from backend.app.models.schemas import EvidenceNode
+        evidence_id = f"ev_{uuid.uuid4().hex[:8]}"
+        graph_client.add_node(EvidenceNode(
+            id=evidence_id,
+            label=f"Evidence: {req.evidence_source}",
+            source_uri=req.evidence_source,
+            content_snippet=req.evidence_snippet or "",
+            session_id=req.session_id,
+            created_at=now,
+            valid_from=now,
+        ))
+        graph_client.add_edge(GraphEdge(
+            id=f"edge_ev_{fact_id}_{evidence_id}",
+            source_id=fact_id,
+            target_id=evidence_id,
+            edge_type=EdgeType.SUPPORTED_BY,
+            created_at=now,
+        ))
 
     if req.agent_id:
         graph_client.add_edge(GraphEdge(
@@ -186,6 +222,7 @@ def post_ingest_decision(req: IngestDecisionRequest) -> Dict[str, Any]:
         session_id=req.session_id,
         created_at=now,
         valid_from=now,
+        executor_url=req.executor_url,
     )
     graph_client.add_node(decision)
 
@@ -197,11 +234,11 @@ def post_ingest_decision(req: IngestDecisionRequest) -> Dict[str, Any]:
         created_at=now,
     ))
 
-    for fact_id in req.depends_on_fact_ids:
+    for dependency_id in req.depends_on_node_ids:
         graph_client.add_edge(GraphEdge(
-            id=f"edge_dep_{dec_id}_{fact_id}",
+            id=f"edge_dep_{dec_id}_{dependency_id}",
             source_id=dec_id,
-            target_id=fact_id,
+            target_id=dependency_id,
             edge_type=EdgeType.DEPENDS_ON,
             created_at=now,
         ))
@@ -223,16 +260,18 @@ def post_ingest_artifact(req: IngestArtifactRequest) -> Dict[str, Any]:
         session_id=req.session_id,
         created_at=now,
         valid_from=now,
+        executor_url=req.executor_url,
     )
     graph_client.add_node(art)
 
-    graph_client.add_edge(GraphEdge(
-        id=f"edge_art_dec_{art_id}_{req.decision_id}",
-        source_id=art_id,
-        target_id=req.decision_id,
-        edge_type=EdgeType.DEPENDS_ON,
-        created_at=now,
-    ))
+    for dependency_id in req.depends_on_node_ids:
+        graph_client.add_edge(GraphEdge(
+            id=f"edge_art_dep_{art_id}_{dependency_id}",
+            source_id=art_id,
+            target_id=dependency_id,
+            edge_type=EdgeType.DEPENDS_ON,
+            created_at=now,
+        ))
 
     return {"status": "created", "artifact_id": art_id}
 
@@ -251,4 +290,3 @@ if os.path.exists(frontend_path):
     @app.get("/")
     def serve_index():
         return FileResponse(os.path.join(frontend_path, "index.html"))
-

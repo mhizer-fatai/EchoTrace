@@ -37,9 +37,13 @@ def calculate_blast_radius(fact_id: str, session_id: str = "default") -> BlastRa
             elif kind == NodeKind.ARTIFACT.value or kind == NodeKind.ARTIFACT:
                 affected_artifacts_count += 1
 
-    # Extract contamination paths using the in-memory directed graph
+    # Build a local projection of the authoritative session graph for path reporting
     contamination_paths: List[List[str]] = []
-    subgraph = graph_client.in_memory.graph
+    session_graph = graph_client.get_session_graph(session_id)
+    subgraph = nx.DiGraph()
+    subgraph.add_nodes_from(node["id"] for node in session_graph.get("nodes", []))
+    for edge in session_graph.get("edges", []):
+        subgraph.add_edge(edge["source_id"], edge["target_id"])
 
     for target_id in downstream_ids:
         try:
