@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.config import settings
 from backend.app.engine.blast_radius import calculate_blast_radius
 from backend.app.engine.contradiction import generate_memory_health_report
-from backend.app.engine.demo import seed_track_three_demo
+from backend.app.engine.demo import seed_memory_story
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.memory import ingest_conversation, query_memory
@@ -134,9 +134,9 @@ def post_query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
     return query_memory(request)
 
 
-@app.post("/api/demo/track-three")
-def post_seed_track_three_demo() -> Dict[str, Any]:
-    return seed_track_three_demo()
+@app.post("/api/demo/memory-story")
+def post_seed_memory_story() -> Dict[str, Any]:
+    return seed_memory_story()
 
 
 # SDK Ingestion Endpoints

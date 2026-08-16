@@ -55,7 +55,7 @@ docker compose up --build
 
 Prerequisite: Docker Desktop or Docker Engine with the Compose plugin. Compose creates the local HydraDB directories and development authentication token automatically.
 
-Open `http://localhost:8000`. Click **Launch App** to load the built-in Track 03 memory graph, or use the session field to load data ingested by a real agent application.
+Open `http://localhost:8000`. Click **Launch App** to load the built-in cross-session memory graph, or use the session field to load data ingested by a real agent application.
 If port 8000 is occupied, set `ECHOTRACE_PUBLISHED_PORT` before starting Compose.
 
 Compose follows HydraDB v0.1.1's single-node local-storage contract. Durable files are written under `hydradb-data/store`, disposable cache files under `hydradb-data/cache`, and readiness is checked through the admin endpoint on port `9090`.
@@ -180,7 +180,7 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/ingest/artifact`
 - `POST /api/memory/conversations`
 - `POST /api/memory/query`
-- `POST /api/demo/track-three`
+- `POST /api/demo/memory-story`
 - `POST /api/facts/invalidate?session_id=...`
 - `POST /api/subgraph/heal?session_id=...`
 - `GET /api/graph/{session_id}`
@@ -196,7 +196,7 @@ Interactive API documentation is available at `http://localhost:8000/docs`.
 python -m pytest tests/ -v
 ```
 
-The 15-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable Track 03 demo, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
+The 15-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
 
 ## Demo For Reviewers
 

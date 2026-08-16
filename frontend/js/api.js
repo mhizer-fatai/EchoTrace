@@ -60,8 +60,8 @@ const API = {
     return await res.json();
   },
 
-  async loadTrackThreeDemo() {
-    const res = await fetch(`${this.baseUrl}/api/demo/track-three`, { method: 'POST' });
+  async loadMemoryStory() {
+    const res = await fetch(`${this.baseUrl}/api/demo/memory-story`, { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   }

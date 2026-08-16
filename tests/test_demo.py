@@ -1,12 +1,12 @@
-from backend.app.engine.demo import DEMO_SESSION_ID, seed_track_three_demo
+from backend.app.engine.demo import DEMO_SESSION_ID, seed_memory_story
 from backend.app.graph.client import graph_client
 
 
-def test_track_three_demo_is_repeatable_and_connected():
+def test_memory_story_is_repeatable_and_connected():
     graph_client.clear_session(DEMO_SESSION_ID)
 
-    first = seed_track_three_demo()
-    second = seed_track_three_demo()
+    first = seed_memory_story()
+    second = seed_memory_story()
     graph = graph_client.get_session_graph(DEMO_SESSION_ID)
 
     assert first["answer"]["answer"] == "October"

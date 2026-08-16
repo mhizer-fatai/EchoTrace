@@ -45,7 +45,7 @@ def _demo_response() -> Dict[str, Any]:
     }
 
 
-def seed_track_three_demo() -> Dict[str, Any]:
+def seed_memory_story() -> Dict[str, Any]:
     existing = graph_client.get_session_graph(DEMO_SESSION_ID)
     existing_ids = {node["id"] for node in existing.get("nodes", [])}
     if DEMO_NODE_IDS.issubset(existing_ids) and len(existing.get("edges", [])) >= 6:

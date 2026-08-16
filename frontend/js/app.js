@@ -134,7 +134,7 @@ class App {
     const button = document.getElementById("btnLoadDemo");
     this.setBusy(button, true, "Loading demo...");
     try {
-      const demo = await API.loadTrackThreeDemo();
+      const demo = await API.loadMemoryStory();
       this.currentSessionId = demo.session_id;
       const input = document.getElementById("sessionInput");
       if (input) input.value = this.currentSessionId;
