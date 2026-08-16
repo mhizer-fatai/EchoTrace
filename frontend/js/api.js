@@ -64,6 +64,41 @@ const API = {
     const res = await fetch(`${this.baseUrl}/api/demo/memory-story`, { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
+  },
+
+  async sendDemoMessage(content, sessionId = null) {
+    const res = await fetch(`${this.baseUrl}/api/demo/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, session_id: sessionId })
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  },
+
+  async replayDemo() {
+    const res = await fetch(`${this.baseUrl}/api/demo/replay`, { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  },
+
+  async resetDemo() {
+    const res = await fetch(`${this.baseUrl}/api/demo/reset`, { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  },
+
+  async queryMemory(question) {
+    const res = await fetch(`${this.baseUrl}/api/memory/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: 'demo-user', question, include_history: true })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   }
 };
 

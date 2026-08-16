@@ -227,6 +227,11 @@ class IngestConversationResponse(BaseModel):
     memories_superseded: List[str]
 
 
+class DemoChatRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+    session_id: Optional[str] = Field(default=None, max_length=100)
+
+
 class MemoryQueryRequest(BaseModel):
     user_id: str
     question: str

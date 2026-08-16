@@ -68,12 +68,14 @@ Relevant environment variables:
 | --- | --- | --- |
 | `HYDRADB_BOLT_URI` | HydraDB Bolt endpoint | `bolt://127.0.0.1:7687` |
 | `HYDRADB_AUTH_TOKEN` | HydraDB authentication token | local development token |
-| `USE_IN_MEMORY_FALLBACK` | Permit non-durable startup without HydraDB | `true` |
+| `USE_IN_MEMORY_FALLBACK` | Permit non-durable startup without HydraDB | `false` |
 | `EXECUTOR_ALLOWED_HOSTS` | Comma-separated webhook host allowlist | empty |
 | `EXECUTOR_TIMEOUT_SECONDS` | Per-node execution timeout | `30` |
 | `EXECUTOR_BEARER_TOKEN` | Optional shared bearer credential | empty |
 
 Set `USE_IN_MEMORY_FALLBACK=false` outside local development. At least one host must be present in `EXECUTOR_ALLOWED_HOSTS` before stale nodes can be executed.
+
+HydraDB is required by default. Set `USE_IN_MEMORY_FALLBACK=true` only for local development without a running HydraDB instance.
 
 ## Instrument A Workflow
 
@@ -181,6 +183,9 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/memory/conversations`
 - `POST /api/memory/query`
 - `POST /api/demo/memory-story`
+- `POST /api/demo/chat`
+- `POST /api/demo/replay`
+- `POST /api/demo/reset`
 - `POST /api/facts/invalidate?session_id=...`
 - `POST /api/subgraph/heal?session_id=...`
 - `GET /api/graph/{session_id}`
@@ -196,18 +201,20 @@ Interactive API documentation is available at `http://localhost:8000/docs`.
 python -m pytest tests/ -v
 ```
 
-The 15-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
+The 16-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, an idempotent 30-session replay through real ingestion, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
 
 ## Demo For Reviewers
 
-After starting Compose, open `http://localhost:8000` and click **Launch App**. EchoTrace seeds and opens an idempotent seven-node HydraDB story showing:
+After starting Compose, open `http://localhost:8000` and click **Launch App**. The studio opens as an interactive chatbot against one fixed user, `demo-user`. Every chat message is a new source session committed to HydraDB through the real `ingest_conversation()` pipeline, and the graph grows live on the right as you talk:
 
-- `session_04`: the trip is in June
-- `session_18`: the trip moves to October
-- June preserved as superseded history
-- October returned as the current answer with its source citation
-- an unsupported question returning `INSUFFICIENT_EVIDENCE`
-- a planning decision and itinerary linked to the current memory
+- **Tell it something** — `My trip is in June.` → EchoTrace extracts a fact and draws a message→fact `SUPPORTED_BY` edge.
+- **Change your mind** — `I moved my trip to October.` → the June fact is superseded (`SUPERSEDED_BY` edge) and the new fact becomes active.
+- **Ask it** — `When is my trip?` → it answers from the current fact with its source citation and the superseded history, or returns `INSUFFICIENT_EVIDENCE` (abstention) when nothing is recorded.
+- **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
+
+Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 30), **Replay 30 sessions** ingests a deterministic 30-session corpus through the same path (`scale_01`–`scale_30`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.
+
+The API surface for the interactive demo is `POST /api/demo/chat`, `POST /api/demo/replay`, and `POST /api/demo/reset`.
 
 No model API key is required for the application, demo, memory query, or test suite.
 

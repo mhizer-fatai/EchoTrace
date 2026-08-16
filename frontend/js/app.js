@@ -1,6 +1,7 @@
 class App {
   constructor() {
-    this.currentSessionId = this.sessionFromUrl() || "default";
+    this.sessionId = "memory:demo-user";
+    this.currentSessionId = this.sessionId;
     this.selectedNode = null;
     this.currentView = window.location.hash.startsWith("#studio") ? "studio" : "landing";
     this.graphVisualizer = new GraphVisualizer("studioGraphCanvas");
@@ -12,22 +13,16 @@ class App {
     this.initializeScrollStory();
     this.showView(this.currentView, false);
     this.checkHealth();
-    if (this.currentView === "studio") this.refreshStudio();
-  }
-
-  sessionFromUrl() {
-    return new URLSearchParams(window.location.search).get("session");
+    if (this.currentView === "studio") this.openStudio();
   }
 
   bindControls() {
     document.getElementById("btnLaunchStudio")?.addEventListener("click", () => {
       if (this.currentView === "studio") this.showView("landing");
-      else this.openDemoStudio();
+      else this.openStudio();
     });
-    document.getElementById("heroLaunchButton")?.addEventListener("click", () => this.openDemoStudio());
-    document.getElementById("btnViewLiveGraph")?.addEventListener("click", () => this.openDemoStudio());
-    document.getElementById("navDebuggerStudio")?.addEventListener("click", () => this.showView("studio"));
-    document.getElementById("btnLoadDemo")?.addEventListener("click", () => this.openDemoStudio());
+    document.getElementById("heroLaunchButton")?.addEventListener("click", () => this.openStudio());
+    document.getElementById("btnViewLiveGraph")?.addEventListener("click", () => this.openStudio());
     ["btnBackOverview", "brandButton"].forEach((id) => {
       document.getElementById(id)?.addEventListener("click", () => this.showView("landing"));
     });
@@ -36,69 +31,21 @@ class App {
       if (view !== this.currentView) this.showView(view, false);
     });
 
-    const sessionInput = document.getElementById("sessionInput");
-    if (sessionInput) sessionInput.value = this.currentSessionId;
-    document.getElementById("sessionForm")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      this.currentSessionId = sessionInput.value.trim() || "default";
-      const url = new URL(window.location.href);
-      url.searchParams.set("session", this.currentSessionId);
-      url.hash = "studio";
-      window.history.replaceState({}, "", url);
-      await this.refreshStudio();
-    });
-
-    document.getElementById("btnTriggerInvalidate")?.addEventListener("click", () => {
-      if (!this.selectedNode || this.selectedNode.kind !== "FACT") {
-        this.message("Select a fact node in the graph before invalidating.", true);
-        return;
-      }
-      document.getElementById("modalFactId").value = this.selectedNode.id;
-      document.getElementById("modalReason").value = "";
-      document.getElementById("modalReplacement").value = "";
-      document.getElementById("modalEvidence").value = "";
-      document.getElementById("invalidateModal").showModal();
-    });
-    document.getElementById("btnModalCancel")?.addEventListener("click", () => document.getElementById("invalidateModal").close());
-    document.getElementById("invalidateForm")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const button = event.submitter;
-      this.setBusy(button, true, "Invalidating...");
-      try {
-        const result = await API.invalidateFact(this.currentSessionId, {
-          fact_id: document.getElementById("modalFactId").value,
-          reason: document.getElementById("modalReason").value,
-          replacement_value: document.getElementById("modalReplacement").value || null,
-          evidence_uri: document.getElementById("modalEvidence").value || null,
-          auto_heal: false
-        });
-        document.getElementById("invalidateModal").close();
-        this.graphVisualizer.setBlastRadiusHighlight(result.blast_radius.affected_nodes.map((node) => node.id));
-        this.message(`${result.blast_radius.affected_nodes_count} downstream nodes marked stale.`);
-        await this.refreshStudio();
-      } catch (error) {
-        this.message(`Invalidation failed: ${error.message}`, true);
-      } finally {
-        this.setBusy(button, false, "Invalidate fact");
-      }
-    });
-    document.getElementById("btnAutoHeal")?.addEventListener("click", async (event) => {
-      const button = event.currentTarget;
-      this.setBusy(button, true, "Executing...");
-      try {
-        const result = await API.healSubgraph(this.currentSessionId);
-        this.message(result.message, !result.success);
-        await this.refreshStudio();
-      } catch (error) {
-        this.message(`Execution failed: ${error.message}`, true);
-      } finally {
-        this.setBusy(button, false, "Execute stale subgraph");
-      }
-    });
     document.getElementById("btnThemeToggle")?.addEventListener("click", () => {
       const theme = document.documentElement.classList.contains("theme-light") ? "dark" : "light";
       this.applyTheme(theme);
       localStorage.setItem("echotrace_theme", theme);
+    });
+    document.getElementById("demoChatForm")?.addEventListener("submit", (event) => this.submitChat(event));
+    document.getElementById("btnNewChat")?.addEventListener("click", () => this.newChat());
+    document.getElementById("btnResetDemo")?.addEventListener("click", (event) => this.resetStory(event.currentTarget));
+    document.getElementById("btnReplaySessions")?.addEventListener("click", (event) => this.replaySessions(event.currentTarget));
+    document.getElementById("chatThread")?.addEventListener("click", (event) => {
+      const chip = event.target.closest("[data-suggestion]");
+      if (chip) {
+        document.getElementById("demoChatInput").value = chip.getAttribute("data-suggestion");
+        this.submitChat(new Event("submit"));
+      }
     });
   }
 
@@ -130,35 +77,13 @@ class App {
     updateProgress();
   }
 
-  async openDemoStudio() {
-    const button = document.getElementById("btnLoadDemo");
-    this.setBusy(button, true, "Loading demo...");
-    try {
-      const demo = await API.loadMemoryStory();
-      this.currentSessionId = demo.session_id;
-      const input = document.getElementById("sessionInput");
-      if (input) input.value = this.currentSessionId;
-      const url = new URL(window.location.href);
-      url.searchParams.set("session", this.currentSessionId);
-      url.hash = "studio";
-      window.history.replaceState({}, "", url);
-      this.showView("studio", false);
-      this.message(`Answer: ${demo.answer.answer}. Source: ${demo.answer.evidence[0].session_id}. Earlier memory: ${demo.answer.history[0].value}.`);
-      await this.refreshStudio();
-    } catch (error) {
-      this.currentSessionId = "memory:demo-user";
-      const input = document.getElementById("sessionInput");
-      if (input) input.value = this.currentSessionId;
-      this.showView("studio", false);
-      try {
-        await this.refreshStudio();
-        this.message("Loaded the existing demo graph after a temporary seed connection error.");
-      } catch (loadError) {
-        this.message(`Demo load failed: ${loadError.message}`, true);
-      }
-    } finally {
-      this.setBusy(button, false, "Load demo story");
-    }
+  async openStudio() {
+    this.showView("studio", false);
+    const url = new URL(window.location.href);
+    url.hash = "studio";
+    window.history.replaceState({}, "", url);
+    this.populateSuggestions();
+    await this.refreshStudio();
   }
 
   showView(view, updateLocation = true) {
@@ -215,14 +140,16 @@ class App {
   async refreshStudio() {
     if (this.currentView !== "studio") return;
     try {
-      const graph = await API.getGraph(this.currentSessionId);
+      const graph = await API.getGraph(this.sessionId);
       this.graphVisualizer.setData(graph.nodes || [], graph.edges || []);
       const empty = document.getElementById("emptyGraphState");
       if (empty) {
         empty.classList.toggle("hidden", graph.nodes.length > 0);
         empty.classList.toggle("grid", graph.nodes.length === 0);
       }
-      await this.healthMonitor.fetchAndRender(this.currentSessionId);
+      const counts = document.getElementById("demoCountsBadge");
+      if (counts) counts.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges`;
+      await this.healthMonitor.fetchAndRender(this.sessionId);
       const times = graph.nodes.map((node) => Date.parse(node.valid_from)).filter(Number.isFinite);
       if (times.length) this.timelineController.setRange(new Date(Math.min(...times)).toISOString(), new Date().toISOString());
       this.graphVisualizer.resizeCanvas();
@@ -231,20 +158,141 @@ class App {
     }
   }
 
+  populateSuggestions() {
+    const container = document.getElementById("suggestionChips");
+    if (!container) return;
+    const suggestions = [
+      "My trip is in June.",
+      "When is my trip?",
+      "Plan my trip itinerary.",
+      "Where did I go to university?",
+    ];
+    container.innerHTML = "";
+    suggestions.forEach((text) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.setAttribute("data-suggestion", text);
+      chip.className = "rounded-full border border-border-subtle bg-surface-elevated px-3 py-1.5 font-mono text-[11px] text-text-secondary transition-colors hover:border-vermilion/60 hover:text-text-primary";
+      chip.textContent = text;
+      container.appendChild(chip);
+    });
+  }
+
+  appendChatBubble(role, html, meta) {
+    const thread = document.getElementById("chatThread");
+    if (!thread) return;
+    const empty = thread.querySelector(".chat-empty");
+    if (empty) empty.remove();
+    const bubble = document.createElement("div");
+    bubble.className = role === "user"
+      ? "max-w-[85%] self-end rounded-2xl rounded-br-sm bg-vermilion px-3.5 py-2.5 text-sm text-white"
+      : "max-w-[92%] self-start rounded-2xl rounded-bl-sm border border-border-subtle bg-surface-elevated px-3.5 py-2.5 text-sm text-text-primary";
+    bubble.innerHTML = html;
+    if (meta) {
+      const tag = document.createElement("div");
+      tag.className = `mt-1.5 font-mono text-[10px] ${role === "user" ? "text-white/70" : "text-text-muted"}`;
+      tag.textContent = meta;
+      bubble.appendChild(tag);
+    }
+    thread.appendChild(bubble);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  renderMarkdown(text) {
+    const escaped = this.escapeHtml(text);
+    return escaped
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code class=\"rounded bg-bg-canvas px-1 py-0.5 font-mono text-[0.85em] text-status-healthy\">$1</code>")
+      .replace(/\n/g, "<br />");
+  }
+
+  newChat() {
+    const thread = document.getElementById("chatThread");
+    if (thread) thread.innerHTML = '<div class="chat-empty">Welcome! Tell me something to remember, ask a question, or ask me to execute a task. Each chat is a new session in the same user memory.</div>';
+    document.getElementById("demoChatInput")?.focus();
+  }
+
+  async submitChat(event) {
+    event.preventDefault();
+    const input = document.getElementById("demoChatInput");
+    const button = document.getElementById("btnSendDemoMessage");
+    const content = input.value.trim();
+    if (!content) return;
+    this.setBusy(button, true, "");
+    this.appendChatBubble("user", this.escapeHtml(content));
+    input.value = "";
+    this.setDemoWriteState("WRITING");
+    try {
+      const result = await API.sendDemoMessage(content);
+      this.currentSessionId = result.session_id;
+      const badge = document.getElementById("demoSessionBadge");
+      if (badge) badge.textContent = result.session_id;
+      const meta = `session ${result.session_id} · committed to HydraDB · ${result.node_count} nodes · ${result.edge_count} edges`;
+      this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply), meta);
+      this.setDemoWriteState("COMMITTED", result.engine_mode);
+      await this.refreshStudio();
+    } catch (error) {
+      this.setDemoWriteState("FAILED");
+      this.appendChatBubble("assistant", this.escapeHtml(`Error: ${error.message}`));
+    } finally {
+      this.setBusy(button, false, "");
+    }
+  }
+
+  async resetStory(button) {
+    this.setBusy(button, true, "Resetting...");
+    try {
+      const result = await API.resetDemo();
+      this.newChat();
+      const badge = document.getElementById("demoSessionBadge");
+      if (badge) badge.textContent = "-";
+      this.setDemoWriteState("READY");
+      await this.refreshStudio();
+      this.message(`Demo memory cleared (${result.engine_mode}).`);
+    } catch (error) {
+      this.message(`Reset failed: ${error.message}`, true);
+    } finally {
+      this.setBusy(button, false, "Reset story");
+    }
+  }
+
+  async replaySessions(button) {
+    this.setBusy(button, true, "Replaying...");
+    this.setDemoWriteState("WRITING");
+    try {
+      const replay = await API.replayDemo();
+      this.appendChatBubble("assistant", this.renderMarkdown(
+        `Replayed the 30-session story through the real memory pipeline.\n\n` +
+        `- Sessions ingested: **${replay.sessions_ingested}**\n` +
+        `- Sessions already present (skipped): **${replay.sessions_skipped}**\n` +
+        `- Memories created: **${replay.memories_created}**\n` +
+        `- Memories superseded: **${replay.memories_superseded}**\n` +
+        `- Graph: **${replay.node_count}** nodes · **${replay.edge_count}** edges`
+      ), `story replayed on ${replay.engine_mode}`);
+      this.setDemoWriteState("COMMITTED", replay.engine_mode);
+      await this.refreshStudio();
+    } catch (error) {
+      this.setDemoWriteState("FAILED");
+      this.message(`Replay failed: ${error.message}`, true);
+    } finally {
+      this.setBusy(button, false, "Replay 30 sessions");
+    }
+  }
+
   inspectNode(node) {
     this.selectedNode = node;
-    document.getElementById("inspNodeId").textContent = node.id;
-    document.getElementById("inspKind").textContent = node.kind;
-    document.getElementById("inspLabel").textContent = node.label;
-    const status = document.getElementById("inspStatus");
-    status.textContent = node.is_stale ? "STALE" : (node.status || "ACTIVE");
-    status.className = node.is_stale ? "text-status-warning font-bold" : "text-status-healthy font-bold";
-    const evidence = document.getElementById("inspEvidenceWrap");
-    evidence.classList.toggle("hidden", !node.source_uri);
-    document.getElementById("inspEvidence").textContent = node.source_uri || "";
-    const content = document.getElementById("inspCodeBlockWrap");
-    content.classList.toggle("hidden", !node.content);
-    document.getElementById("inspCodeBlock").textContent = node.content || "";
+  }
+
+  setDemoWriteState(state, engineMode = "HYDRADB BOLT") {
+    const indicator = document.getElementById("demoWriteIndicator");
+    const engine = document.getElementById("demoEngineMode");
+    if (indicator) {
+      indicator.textContent = state;
+      const successful = state === "COMMITTED";
+      const failed = state === "FAILED";
+      indicator.className = `text-[10px] ${successful ? "text-status-healthy" : failed ? "text-status-warning" : "text-text-muted"}`;
+    }
+    if (engine) engine.textContent = engineMode.toUpperCase();
   }
 
   setBusy(button, busy, label) {
@@ -253,6 +301,12 @@ class App {
     button.classList.toggle("opacity-60", busy);
     const text = Array.from(button.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
     if (text) text.textContent = label;
+  }
+
+  escapeHtml(value) {
+    const element = document.createElement("span");
+    element.textContent = String(value ?? "");
+    return element.innerHTML;
   }
 
   message(text, isError = false) {

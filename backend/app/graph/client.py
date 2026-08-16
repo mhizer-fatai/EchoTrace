@@ -302,7 +302,7 @@ class HydraDBClient:
             "status": record.get("status", node.get("status")),
             "is_stale": record.get("is_stale", node.get("is_stale", False)),
         })
-        return node
+        return HydraDBClient._deserialize_properties(node)
 
     @staticmethod
     def _node_projection(alias: str = "n") -> str:
@@ -388,21 +388,24 @@ class HydraDBClient:
         if not self.connected_to_hydradb:
             return self.in_memory.get_session_graph(session_id, snapshot_time)
 
-        parameters: Dict[str, Any] = {"session_id": session_id}
-        temporal_filter = ""
-        if snapshot_time:
-            parameters["snapshot_time"] = snapshot_time.isoformat()
-            temporal_filter = (
-                " AND n.valid_from <= $snapshot_time "
-                "AND (n.valid_to IS NULL OR n.valid_to > $snapshot_time)"
-            )
         records = self.execute_cypher(
             "MATCH (n:EchoTraceNode {session_id: $session_id})"
-            + temporal_filter
             + f" RETURN {self._node_projection()}",
-            parameters,
+            {"session_id": session_id},
         )
         nodes = [self._node_from_record(record) for record in records]
+        if snapshot_time:
+            if snapshot_time.tzinfo is None:
+                snapshot_time = snapshot_time.replace(tzinfo=timezone.utc)
+            nodes = [
+                node
+                for node in nodes
+                if datetime.fromisoformat(str(node["valid_from"])) <= snapshot_time
+                and (
+                    not node.get("valid_to")
+                    or datetime.fromisoformat(str(node["valid_to"])) > snapshot_time
+                )
+            ]
         node_ids = [node["id"] for node in nodes]
         if not node_ids:
             return {"nodes": [], "edges": []}
@@ -417,7 +420,8 @@ class HydraDBClient:
         for record in edge_records:
             edge = json.loads(record.get("payload") or "{}")
             edge.update({key: record.get(key, edge.get(key)) for key in ("id", "source_id", "target_id", "edge_type", "created_at")})
-            edges.append(edge)
+            if edge.get("source_id") in node_ids and edge.get("target_id") in node_ids:
+                edges.append(edge)
         return {"nodes": nodes, "edges": edges}
 
     def get_downstream_dependencies(self, fact_id: str, session_id: str) -> List[str]:

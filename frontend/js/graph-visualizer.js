@@ -68,7 +68,21 @@ class GraphVisualizer {
     this.nodeMap.clear();
     this.nodes.forEach(n => this.nodeMap.set(n.id, n));
 
+    this.newNodeHighlight = this.newestNodeId();
     this.calculateHierarchicalLayout();
+  }
+
+  newestNodeId() {
+    let newest = null;
+    let newestTime = -Infinity;
+    this.nodes.forEach((n) => {
+      const t = Date.parse(n.valid_from || n.created_at || "");
+      if (Number.isFinite(t) && t > newestTime) {
+        newestTime = t;
+        newest = n.id;
+      }
+    });
+    return newest;
   }
 
   setBlastRadiusHighlight(nodeIdArray) {
@@ -135,24 +149,51 @@ class GraphVisualizer {
 
     const tierKeys = ['MESSAGE', 'EVIDENCE', 'FACT', 'AGENT', 'DECISION', 'ARTIFACT'];
     const activeTiers = tierKeys.filter(k => tiers[k].length > 0);
-    const tierHeight = (height - 140) / Math.max(1, activeTiers.length - 1);
+    const tierGap = 120;
+    const nodeGap = 34;
+    const margin = 90;
+    const labelSpace = 34;
+    const maxTierWidth = Math.max(320, width - margin * 2);
+    const maxPerRow = Math.max(1, Math.floor((maxTierWidth + nodeGap) / (nodeGap + 56)));
+    const usableHeight = height - margin * 2;
 
+    const tierPositions = {};
+    let cursorY = margin;
     activeTiers.forEach((tierName, tierIdx) => {
       const tierNodes = tiers[tierName];
       const count = tierNodes.length;
-      const spacingX = Math.min(220, (width - 160) / Math.max(1, count));
-      const startX = (width - (count - 1) * spacingX) / 2;
-      const y = 60 + tierIdx * tierHeight;
+      const rows = Math.max(1, Math.ceil(count / maxPerRow));
+      const tierHeight = rows * (56 + labelSpace);
+      const startY = cursorY;
+      const centerX = width / 2;
 
       tierNodes.forEach((node, nodeIdx) => {
-        node.x = startX + nodeIdx * spacingX;
-        node.y = y;
+        const row = Math.floor(nodeIdx / maxPerRow);
+        const col = nodeIdx % maxPerRow;
+        const rowCount = Math.min(maxPerRow, count - row * maxPerRow);
+        const rowWidth = (rowCount - 1) * nodeGap + 56;
+        const startX = centerX - rowWidth / 2;
+        node.x = startX + col * nodeGap + 28;
+        node.y = startY + row * (56 + labelSpace) + 28;
       });
+      tierPositions[tierName] = { startY, endY: startY + tierHeight };
+      cursorY += tierHeight + tierGap;
+      void tierIdx;
     });
+
+    // If the total content is taller than the canvas, scale down compactly
+    const totalUsed = cursorY - tierGap + margin;
+    const fitScale = Math.min(1, usableHeight / Math.max(1, totalUsed - margin));
+    if (fitScale < 1) {
+      this.nodes.forEach(node => {
+        node.x = width / 2 + (node.x - width / 2) * fitScale;
+        node.y = margin + (node.y - margin) * fitScale;
+      });
+    }
 
     this.panX = 0;
     this.panY = 0;
-    this.zoom = 1;
+    this.zoom = fitScale < 1 ? fitScale : 1;
   }
 
   setupEvents() {
@@ -253,6 +294,18 @@ class GraphVisualizer {
     this.nodes.forEach(node => {
       this.drawNode(node);
     });
+
+    // Pulse highlight on the newest node
+    const newest = this.newNodeHighlight ? this.nodeMap.get(this.newNodeHighlight) : null;
+    if (newest) {
+      const time = performance.now() / 1000;
+      const pulse = (Math.sin(time * 2.5) + 1) / 2;
+      this.ctx.beginPath();
+      this.ctx.arc(newest.x, newest.y, newest.radius + 6 + pulse * 6, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(46, 204, 113, ${0.5 - pulse * 0.3})`;
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+    }
 
     this.ctx.restore();
   }

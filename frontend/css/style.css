@@ -370,6 +370,16 @@ html.motion-ready .reveal-scale.is-revealed {
 .panel-title .material-symbols-outlined { color: var(--vermilion); font-size: 17px; }
 .legend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
 
+.chat-empty {
+  max-width: 90%;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 12px;
+  padding: 14px;
+}
+
 .inspector-field > span,
 .form-field {
   color: var(--text-secondary);
