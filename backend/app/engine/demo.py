@@ -334,7 +334,24 @@ def ingest_demo_message(
 
         if query_res.status == "ANSWERED":
             source_s = query_res.evidence[0].session_id if query_res.evidence else "earlier session"
-            reply = f"Based on your cross-session memory, your **{query_res.property_name.replace('_', ' ')}** is **{query_res.answer}**.\n\n📌 **Cited Source:** `{source_s}`"
+            if query_res.anchor_property_name:
+                reply = (
+                    f"When your **{query_res.anchor_property_name.replace('_', ' ')}** was "
+                    f"**{query_res.anchor_value}**, your **{query_res.property_name.replace('_', ' ')}** "
+                    f"was **{query_res.answer}**.\n\n"
+                    f"🔗 **Synthesized** by walking the timeline: `{query_res.anchor_property_name}` "
+                    f"anchored the moment, then the active `{query_res.property_name}` was resolved.\n"
+                    f"📌 **Cited Source:** `{source_s}`"
+                )
+            elif query_res.as_of:
+                reply = (
+                    f"As of **{query_res.as_of}**, your **{query_res.property_name.replace('_', ' ')}** "
+                    f"was **{query_res.answer}**.\n\n"
+                    f"🕰️ **Temporal snapshot** from the memory timeline.\n"
+                    f"📌 **Cited Source:** `{source_s}`"
+                )
+            else:
+                reply = f"Based on your cross-session memory, your **{query_res.property_name.replace('_', ' ')}** is **{query_res.answer}**.\n\n📌 **Cited Source:** `{source_s}`"
             if query_res.history:
                 history_lines = "\n".join(f"- `{h.value}` (from `{h.session_id}`)" for h in query_res.history)
                 reply += f"\n\n⏳ **Superseded History:**\n{history_lines}"

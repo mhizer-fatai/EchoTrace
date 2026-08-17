@@ -131,6 +131,13 @@ BENCH_QUESTIONS: List[Tuple[str, str, Dict[str, Any]]] = [
     ("What is my pet's name?", "ABSTAIN", {"status": "INSUFFICIENT_EVIDENCE"}),
     ("What is my mother's maiden name?", "ABSTAIN", {"status": "INSUFFICIENT_EVIDENCE"}),
     ("What is my next performance review date?", "ABSTAIN", {"status": "INSUFFICIENT_EVIDENCE"}),
+    # Multi-hop: synthesize across two properties by walking the timeline.
+    ("Which workplace was active when my trip was in July?", "Vertex Labs", {}),
+    ("Which workplace was active when my trip was in February?", "Acme Corp", {}),
+    ("What was my work email when my trip was in July?", "sarah@vertexlabs.ai", {}),
+    # Temporal: what was true as of a specific instant.
+    ("What was my trip as of 2026-01-10?", "October", {}),
+    ("What was my trip as of 2026-01-15?", "December", {}),
 ]
 
 

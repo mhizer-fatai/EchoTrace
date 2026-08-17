@@ -236,6 +236,10 @@ class MemoryQueryRequest(BaseModel):
     user_id: str
     question: str
     include_history: bool = True
+    # Optional structured hints for multi-hop / temporal queries. When left
+    # unset, query_memory derives them from the question text itself.
+    as_of: Optional[str] = None  # ISO datetime for "what was true as of <time>"
+    target_property: Optional[str] = None  # multi-hop: property to look up
 
 
 class MemoryCitation(BaseModel):
@@ -254,6 +258,11 @@ class MemoryQueryResponse(BaseModel):
     property_name: Optional[str] = None
     evidence: List[MemoryCitation] = Field(default_factory=list)
     history: List[MemoryCitation] = Field(default_factory=list)
+    # Multi-hop / temporal context (when present, the answer was synthesized by
+    # walking the timeline rather than reading a single fact).
+    anchor_property_name: Optional[str] = None
+    anchor_value: Optional[str] = None
+    as_of: Optional[str] = None
 
 
 class ExecutorResponse(BaseModel):

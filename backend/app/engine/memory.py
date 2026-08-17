@@ -1,7 +1,7 @@
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
@@ -185,6 +185,162 @@ def _citation(node: Dict) -> MemoryCitation:
     )
 
 
+def _as_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _parse_as_of(explicit: Optional[str]) -> Optional[datetime]:
+    if not explicit:
+        return None
+    return _as_datetime(explicit)
+
+
+def _parse_as_of_from_question(question: str) -> Optional[datetime]:
+    match = re.search(
+        r"\bas of\s+([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})", question, re.IGNORECASE
+    )
+    if not match:
+        return None
+    try:
+        return datetime(
+            int(match.group(1)), int(match.group(2)), int(match.group(3)),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        return None
+
+
+def _mentioned_properties(facts: List[Dict], question_tokens: set) -> set:
+    """Properties the question explicitly points at (via alias or property name)."""
+    mentioned = set()
+    for token in question_tokens:
+        canonical = _PROPERTY_ALIASES.get(token)
+        if canonical:
+            mentioned.add(canonical)
+    for fact in facts:
+        property_name = str(fact.get("property_name", ""))
+        property_parts = {
+            token for token in re.findall(r"[a-z0-9]+", property_name.lower())
+            if len(token) > 1
+        }
+        if property_parts & question_tokens:
+            mentioned.add(property_name)
+    return mentioned
+
+
+def _value_matched_properties(facts: List[Dict], question_tokens: set) -> List[str]:
+    """Properties whose stored value words appear in the question (e.g. 'October')."""
+    value_tokens_by_property: Dict[str, set] = {}
+    for fact in facts:
+        property_name = str(fact.get("property_name", ""))
+        value_tokens = _tokens(str(fact.get("property_value", "")))
+        if value_tokens:
+            value_tokens_by_property.setdefault(property_name, set()).update(value_tokens)
+    return [
+        property_name
+        for property_name, value_tokens in value_tokens_by_property.items()
+        if question_tokens & value_tokens
+    ]
+
+
+def _matching_fact(facts: List[Dict], property_name: str, question_tokens: set) -> Optional[Dict]:
+    """The fact whose value words all appear in the question (latest first)."""
+    candidates = [
+        fact for fact in facts if str(fact.get("property_name", "")) == property_name
+    ]
+    candidates.sort(key=lambda fact: str(fact.get("valid_from", "")), reverse=True)
+    for fact in candidates:
+        value_tokens = _tokens(str(fact.get("property_value", "")))
+        if value_tokens and value_tokens.issubset(question_tokens):
+            return fact
+    return None
+
+
+def _fact_valid_at(facts: List[Dict], property_name: str, at: Optional[datetime]) -> Optional[Dict]:
+    """The fact for `property_name` that was in effect at instant `at`."""
+    if at is None:
+        return None
+    candidates = []
+    for fact in facts:
+        if str(fact.get("property_name", "")) != property_name:
+            continue
+        valid_from = _as_datetime(fact.get("valid_from"))
+        valid_to = _as_datetime(fact.get("valid_to"))
+        if valid_from is None or valid_from > at:
+            continue
+        if valid_to is not None and valid_to <= at:
+            continue
+        candidates.append(fact)
+    if not candidates:
+        return None
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    return max(candidates, key=lambda fact: _as_datetime(fact.get("valid_from")) or epoch)
+
+
+def _property_mention_score(property_name: str, question_tokens: set) -> int:
+    """How directly the question points at a property.
+
+    Direct property-name words count double (e.g. "email" naming work_email),
+    alias hits count once (e.g. "work" hinting at workplace). The anchor
+    property's own value words are excluded by the caller so they never inflate
+    the target's score.
+    """
+    property_parts = {
+        token for token in re.findall(r"[a-z0-9]+", property_name.lower())
+        if len(token) > 1
+    }
+    alias_hits = {
+        token for token, canonical in _PROPERTY_ALIASES.items()
+        if canonical == property_name and token in question_tokens
+    }
+    return len(property_parts & question_tokens) * 2 + len(alias_hits)
+
+
+def _detect_multihop(
+    facts: List[Dict], question_tokens: set, explicit_target: Optional[str]
+) -> Tuple[Optional[str], Optional[str], Optional[Dict]]:
+    """Resolve (target_property, anchor_property, anchor_fact) from a multi-hop
+    question such as "Which workplace was active when my trip was in October?".
+
+    The anchor is the property whose value words appear in the question (e.g.
+    'trip' -> 'October'); the target is the other property the question points
+    at most directly (e.g. 'workplace', or 'work_email' for "work email").
+    """
+    mentioned = _mentioned_properties(facts, question_tokens)
+    value_matched = _value_matched_properties(facts, question_tokens)
+
+    if explicit_target:
+        target = explicit_target
+        anchors = [property_name for property_name in value_matched if property_name != target]
+        if not anchors:
+            return None, None, None
+        anchor_fact = _matching_fact(facts, anchors[0], question_tokens)
+        return target, anchors[0], anchor_fact
+
+    if len(value_matched) == 1 and len(mentioned) >= 2:
+        anchor_property = value_matched[0]
+        candidates = [
+            property_name for property_name in mentioned if property_name != anchor_property
+        ]
+        if candidates:
+            scored = [
+                (_property_mention_score(property_name, question_tokens), property_name)
+                for property_name in candidates
+            ]
+            scored.sort(reverse=True)
+            # Only treat it as multi-hop if the question actually points at the
+            # target (score > 0); otherwise fall through to single-fact lookup.
+            if scored[0][0] > 0:
+                anchor_fact = _matching_fact(facts, anchor_property, question_tokens)
+                return scored[0][1], anchor_property, anchor_fact
+    return None, None, None
+
+
 def query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
     nodes = graph_client.get_session_graph(_memory_scope(request.user_id)).get("nodes", [])
     facts = [
@@ -196,6 +352,61 @@ def query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
         canonical = _PROPERTY_ALIASES.get(token)
         if canonical:
             question_tokens.add(canonical)
+
+    as_of = _parse_as_of(request.as_of) or _parse_as_of_from_question(request.question)
+    if as_of is not None:
+        # Temporal query: answer with whatever was true at that instant.
+        ranked = []
+        for fact in facts:
+            property_name = str(fact.get("property_name", ""))
+            label_tokens = _tokens(str(fact.get("label", "")))
+            property_tokens = {property_name}
+            score = len(question_tokens & property_tokens) * 3 + len(question_tokens & label_tokens)
+            if score:
+                ranked.append((score, fact))
+        if not ranked:
+            return MemoryQueryResponse(status="INSUFFICIENT_EVIDENCE")
+        ranked.sort(key=lambda item: (item[0], str(item[1].get("valid_from", ""))), reverse=True)
+        property_name = ranked[0][1]["property_name"]
+        fact = _fact_valid_at(facts, property_name, as_of)
+        if fact is None:
+            return MemoryQueryResponse(status="INSUFFICIENT_EVIDENCE", property_name=property_name)
+        history = sorted(
+            (f for f in facts if f.get("property_name") == property_name and f["id"] != fact["id"]),
+            key=lambda f: str(f.get("valid_from", "")),
+            reverse=True,
+        )
+        return MemoryQueryResponse(
+            status="ANSWERED",
+            answer=str(fact["property_value"]),
+            property_name=property_name,
+            evidence=[_citation(fact)],
+            history=[_citation(f) for f in history] if request.include_history else [],
+            as_of=str(as_of),
+        )
+
+    target, anchor_property, anchor_fact = _detect_multihop(facts, question_tokens, request.target_property)
+    if target and anchor_fact is not None:
+        anchor_time = _as_datetime(anchor_fact.get("valid_from"))
+        target_fact = _fact_valid_at(facts, target, anchor_time)
+        if target_fact is not None:
+            history = sorted(
+                (f for f in facts if f.get("property_name") == target and f["id"] != target_fact["id"]),
+                key=lambda f: str(f.get("valid_from", "")),
+                reverse=True,
+            )
+            return MemoryQueryResponse(
+                status="ANSWERED",
+                answer=str(target_fact["property_value"]),
+                property_name=target,
+                evidence=[_citation(target_fact)],
+                history=[_citation(f) for f in history] if request.include_history else [],
+                anchor_property_name=anchor_property,
+                anchor_value=str(anchor_fact.get("property_value", "")),
+                as_of=str(anchor_fact.get("valid_from", "")),
+            )
+        return MemoryQueryResponse(status="INSUFFICIENT_EVIDENCE", property_name=target)
+
     ranked = []
     for fact in facts:
         property_name = str(fact.get("property_name", ""))

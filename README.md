@@ -28,6 +28,8 @@ HydraDB is the durable source of truth for EchoTrace's memory graph. It stores m
 - Durable graph storage in HydraDB over Bolt/OpenCypher
 - Cross-session conversation memory and evidence-backed retrieval
 - Chronological supersession with current and historical values
+- Temporal snapshots ("what was true as of a specific date")
+- Multi-hop synthesis across properties ("which workplace was active when my trip was in July?")
 - Explicit abstention when no supporting memory exists
 - Explicit fact, evidence, decision, and artifact provenance
 - Multi-hop blast-radius calculation
@@ -140,6 +142,11 @@ result = memory.query_memory("user_42", "When is my trip?")
 
 The result answers `October`, cites `session_18`, and includes `June` as superseded history. A question without supporting evidence returns `INSUFFICIENT_EVIDENCE` with no generated answer.
 
+Beyond current-value lookup, `query_memory()` walks the timeline:
+
+- **Temporal snapshots** — `What was my trip as of 2026-01-10?` returns the fact that was in effect at that instant (`October`), not today's value.
+- **Multi-hop synthesis** — `Which workplace was active when my trip was in July?` anchors on the July trip fact's validity window, then resolves the workplace fact active at that moment (`Vertex Labs`), citing both properties' sources.
+
 ## Executor Contract
 
 EchoTrace sends this request to each stale node's executor:
@@ -201,7 +208,7 @@ Interactive API documentation is available at `http://localhost:8000/docs`.
 python -m pytest tests/ -v
 ```
 
-The test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, an idempotent 35-session replay through real ingestion, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, SDK agent registration, and the memory benchmark.
+The test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, an idempotent 35-session replay through real ingestion, multi-hop timeline queries, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, SDK agent registration, and the memory benchmark.
 
 ## Demo For Reviewers
 
@@ -229,10 +236,10 @@ What it does:
 1. **Creates a fresh, uniquely-named scope** (`memory:bench-user-<timestamp>`) per run. No `DETACH DELETE` is needed, so reruns never hit HydraDB's server-side query timeout on the 600-node corpus — each run is fully isolated from the last.
 2. **Ingests the same 35-session story** as the interactive demo (facts, supersessions, tasks, abstentions) through the real `ingest_conversation()` path — so the score backs the UI.
 3. **Pads the corpus deterministically** (seeded, no LLM) with fact-free filler toward the ~115,000-token target, then counts tokens (~4 chars/token).
-4. **Asks 13 scored questions** through `query_memory()` covering current-truth retrieval after supersession, the immediately-preceding value (history head), multi-session synthesis (email, workplace, preference), and abstention (`INSUFFICIENT_EVIDENCE`) on never-recorded facts.
+4. **Asks 18 scored questions** through `query_memory()` covering current-truth retrieval after supersession, the immediately-preceding value (history head), multi-session synthesis (email, workplace, preference), multi-hop timeline walks across two properties (e.g. which workplace was active during a given trip month), temporal snapshots ("as of" a date), and abstention (`INSUFFICIENT_EVIDENCE`) on never-recorded facts.
 5. **Prints a score table** with per-question PASS/FAIL, the run's scope, graph counts, facts created/superseded, and corpus size.
 
-Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 13 questions.** Rerun the script anytime — it is repeatable and self-isolating per run. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
+Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 18 questions.** Rerun the script anytime — it is repeatable and self-isolating per run. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
 
 No model API key is required for the application, demo, memory query, or test suite.
 
