@@ -237,7 +237,7 @@ def ingest_demo_message(
             "content": content,
             "assistant_reply": (
                 f"You've reached the **{DEMO_MAX_SESSIONS}-session cap** for this demo memory. "
-                f"Cross-session memory is fully populated — reset the story or replay the 35-session corpus to start fresh."
+                f"Cross-session memory is fully populated — start a new chat thread on a fresh store to begin again."
             ),
             "is_query": False,
             "reached_cap": True,

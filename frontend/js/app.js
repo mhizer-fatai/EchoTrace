@@ -38,8 +38,6 @@ class App {
     });
     document.getElementById("demoChatForm")?.addEventListener("submit", (event) => this.submitChat(event));
     document.getElementById("btnNewChat")?.addEventListener("click", () => this.newChat());
-    document.getElementById("btnResetDemo")?.addEventListener("click", (event) => this.resetStory(event.currentTarget));
-    document.getElementById("btnReplaySessions")?.addEventListener("click", (event) => this.replaySessions(event.currentTarget));
     document.getElementById("chatThread")?.addEventListener("click", (event) => {
       const chip = event.target.closest("[data-suggestion]");
       if (chip) {
@@ -208,7 +206,7 @@ class App {
 
   newChat() {
     const thread = document.getElementById("chatThread");
-    if (thread) thread.innerHTML = '<div class="chat-empty">Welcome! Tell me something to remember, ask a question, or ask me to execute a task. Each chat is a new session in the same user memory.</div>';
+    if (thread) thread.innerHTML = '<div class="chat-empty">Talk to EchoTrace like a real agent. Each message becomes a new session, commits to HydraDB, and connects the graph live.</div>';
     document.getElementById("demoChatInput")?.focus();
   }
 
@@ -241,46 +239,6 @@ class App {
       this.appendChatBubble("assistant", this.escapeHtml(`Error: ${error.message}`));
     } finally {
       this.setBusy(button, false, "");
-    }
-  }
-
-  async resetStory(button) {
-    this.setBusy(button, true, "Resetting...");
-    try {
-      const result = await API.resetDemo();
-      this.newChat();
-      const badge = document.getElementById("demoSessionBadge");
-      if (badge) badge.textContent = "-";
-      this.setDemoWriteState("READY");
-      await this.refreshStudio();
-      this.message(`Demo memory cleared (${result.engine_mode}).`);
-    } catch (error) {
-      this.message(`Reset failed: ${error.message}`, true);
-    } finally {
-      this.setBusy(button, false, "Reset story");
-    }
-  }
-
-  async replaySessions(button) {
-    this.setBusy(button, true, "Replaying...");
-    this.setDemoWriteState("WRITING");
-    try {
-      const replay = await API.replayDemo();
-      this.appendChatBubble("assistant", this.renderMarkdown(
-        `Replayed the 35-session story through the real memory pipeline.\n\n` +
-        `- Sessions ingested: **${replay.sessions_ingested}**\n` +
-        `- Sessions already present (skipped): **${replay.sessions_skipped}**\n` +
-        `- Memories created: **${replay.memories_created}**\n` +
-        `- Memories superseded: **${replay.memories_superseded}**\n` +
-        `- Graph: **${replay.node_count}** nodes · **${replay.edge_count}** edges`
-      ), `story replayed on ${replay.engine_mode}`);
-      this.setDemoWriteState("COMMITTED", replay.engine_mode);
-      await this.refreshStudio();
-    } catch (error) {
-      this.setDemoWriteState("FAILED");
-      this.message(`Replay failed: ${error.message}`, true);
-    } finally {
-      this.setBusy(button, false, "Replay 35 sessions");
     }
   }
 

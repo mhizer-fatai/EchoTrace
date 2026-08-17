@@ -79,18 +79,6 @@ const API = {
     return await res.json();
   },
 
-  async replayDemo() {
-    const res = await fetch(`${this.baseUrl}/api/demo/replay`, { method: 'POST' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  },
-
-  async resetDemo() {
-    const res = await fetch(`${this.baseUrl}/api/demo/reset`, { method: 'POST' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  },
-
   async queryMemory(question) {
     const res = await fetch(`${this.baseUrl}/api/memory/query`, {
       method: 'POST',
