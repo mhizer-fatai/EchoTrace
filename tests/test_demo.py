@@ -29,13 +29,13 @@ def test_scale_story_replays_through_real_memory_pipeline_idempotently():
     nodes = graph["nodes"]
     edges = graph["edges"]
 
-    assert first["sessions_requested"] == 30
-    assert first["sessions_ingested"] == 30
+    assert first["sessions_requested"] == 35
+    assert first["sessions_ingested"] == 35
     assert first["sessions_skipped"] == 0
     assert first["memories_superseded"] >= 10
     assert second["sessions_ingested"] == 0
-    assert second["sessions_skipped"] == 30
-    assert len([node for node in nodes if node["kind"] == "MESSAGE"]) == 30
+    assert second["sessions_skipped"] == 35
+    assert len([node for node in nodes if node["kind"] == "MESSAGE"]) == 35
     assert len([node for node in nodes if node["kind"] == "FACT"]) == first["memories_created"]
     assert len([edge for edge in edges if edge["edge_type"] == "SUPERSEDED_BY"]) == first["memories_superseded"]
     assert any("university" in node.get("content", "").lower() for node in nodes if node["kind"] == "MESSAGE")

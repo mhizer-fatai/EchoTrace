@@ -25,6 +25,26 @@ _STOP_WORDS = {
     "when", "where", "which", "who", "was",
 }
 
+# Maps natural-language query tokens onto the canonical property name so a
+# question like "Where do I live?" resolves to the stored "location" fact
+# instead of failing on token mismatch.
+_PROPERTY_ALIASES = {
+    "live": "location",
+    "reside": "location",
+    "city": "location",
+    "work": "workplace",
+    "job": "workplace",
+    "company": "workplace",
+    "employer": "workplace",
+    "email": "work_email",
+    "prefer": "preference",
+    "seat": "preference",
+    "color": "favorite_color",
+    "phone": "phone_number",
+    "cell": "phone_number",
+    "passport": "passport_number",
+}
+
 
 def _memory_scope(user_id: str) -> str:
     return f"memory:{user_id}"
@@ -172,10 +192,17 @@ def query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
         if node.get("kind") == "FACT" and node.get("entity") == request.user_id
     ]
     question_tokens = _tokens(request.question)
+    for token in list(question_tokens):
+        canonical = _PROPERTY_ALIASES.get(token)
+        if canonical:
+            question_tokens.add(canonical)
     ranked = []
     for fact in facts:
-        property_tokens = _tokens(str(fact.get("property_name", "")).replace("_", " "))
+        property_name = str(fact.get("property_name", ""))
         label_tokens = _tokens(str(fact.get("label", "")))
+        # The canonical property name is compared as a single token (e.g.
+        # "work_email") so "work email" does not bleed into "workplace".
+        property_tokens = {property_name}
         score = len(question_tokens & property_tokens) * 3 + len(question_tokens & label_tokens)
         if score:
             ranked.append((score, fact))

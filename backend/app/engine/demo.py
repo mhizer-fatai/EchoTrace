@@ -21,6 +21,7 @@ from backend.app.models.schemas import (
 
 DEMO_SESSION_ID = "memory:demo-user"
 DEMO_USER_ID = "demo-user"
+DEMO_MAX_SESSIONS = 35
 DEMO_NODE_IDS = {
     "demo_msg_june",
     "demo_fact_june",
@@ -62,6 +63,11 @@ DEMO_SCENARIO_STEPS = [
     {"session_id": "session_28", "prompt": "My work email is sarah@acme.com.", "description": "Email superseded -> Acme"},
     {"session_id": "session_29", "prompt": "I moved my trip to February.", "description": "Trip superseded -> February"},
     {"session_id": "session_30", "prompt": "When is my trip?", "description": "Query: When is my trip?"},
+    {"session_id": "session_31", "prompt": "My favorite color is teal.", "description": "Favorite color: teal"},
+    {"session_id": "session_32", "prompt": "I moved my trip to November.", "description": "Trip superseded -> November"},
+    {"session_id": "session_33", "prompt": "I now work at Nimbus Systems.", "description": "Workplace superseded -> Nimbus Systems"},
+    {"session_id": "session_34", "prompt": "Where do I work?", "description": "Query: Where do I work?"},
+    {"session_id": "session_35", "prompt": "Plan my trip itinerary.", "description": "Execute task using current memory (November)"},
 ]
 
 DEMO_SCALE_SCRIPT = [item["prompt"] for item in DEMO_SCENARIO_STEPS]
@@ -89,6 +95,11 @@ def _next_live_session_id() -> str:
         if match:
             numbers.append(int(match.group(1)))
     return f"session_{max(numbers, default=0) + 1:02d}"
+
+
+def _session_number(session_id: str) -> int:
+    match = re.fullmatch(r"session_(\d+)", session_id)
+    return int(match.group(1)) if match else 0
 
 
 def _is_question(text: str) -> bool:
@@ -220,6 +231,27 @@ def ingest_demo_message(
     now = occurred_at or datetime.now(timezone.utc)
 
     existing = graph_client.get_session_graph(DEMO_SESSION_ID).get("nodes", [])
+    if session_id is None and _session_number(source_session_id) > DEMO_MAX_SESSIONS:
+        return {
+            "session_id": source_session_id,
+            "content": content,
+            "assistant_reply": (
+                f"You've reached the **{DEMO_MAX_SESSIONS}-session cap** for this demo memory. "
+                f"Cross-session memory is fully populated — reset the story or replay the 35-session corpus to start fresh."
+            ),
+            "is_query": False,
+            "reached_cap": True,
+            "skipped": True,
+            "messages_ingested": 0,
+            "extracted": [],
+            "created": [],
+            "superseded": [],
+            "hydradb_connected": graph_client.connected_to_hydradb,
+            "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
+            "node_count": len(existing),
+            "edge_count": len(graph_client.get_session_graph(DEMO_SESSION_ID).get("edges", [])),
+        }
+
     already_recorded = any(
         (node.get("source_session_id") or (node.get("metadata") or {}).get("source_session_id"))
         == source_session_id

@@ -227,6 +227,11 @@ class App {
       this.currentSessionId = result.session_id;
       const badge = document.getElementById("demoSessionBadge");
       if (badge) badge.textContent = result.session_id;
+      if (result.reached_cap) {
+        this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply));
+        this.setDemoWriteState("COMMITTED", result.engine_mode);
+        return;
+      }
       const meta = `session ${result.session_id} · committed to HydraDB · ${result.node_count} nodes · ${result.edge_count} edges`;
       this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply), meta);
       this.setDemoWriteState("COMMITTED", result.engine_mode);
@@ -262,7 +267,7 @@ class App {
     try {
       const replay = await API.replayDemo();
       this.appendChatBubble("assistant", this.renderMarkdown(
-        `Replayed the 30-session story through the real memory pipeline.\n\n` +
+        `Replayed the 35-session story through the real memory pipeline.\n\n` +
         `- Sessions ingested: **${replay.sessions_ingested}**\n` +
         `- Sessions already present (skipped): **${replay.sessions_skipped}**\n` +
         `- Memories created: **${replay.memories_created}**\n` +
@@ -275,7 +280,7 @@ class App {
       this.setDemoWriteState("FAILED");
       this.message(`Replay failed: ${error.message}`, true);
     } finally {
-      this.setBusy(button, false, "Replay 30 sessions");
+      this.setBusy(button, false, "Replay 35 sessions");
     }
   }
 

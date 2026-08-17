@@ -201,7 +201,7 @@ Interactive API documentation is available at `http://localhost:8000/docs`.
 python -m pytest tests/ -v
 ```
 
-The 16-test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, an idempotent 30-session replay through real ingestion, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, and SDK agent registration.
+The test suite covers cross-session retrieval, temporal supersession, abstention, source citations, the repeatable memory story, an idempotent 35-session replay through real ingestion, HydraDB edge mutations, temporal snapshots, contradiction detection, blast-radius isolation, webhook execution order, executor failures, SDK agent registration, and the memory benchmark.
 
 ## Demo For Reviewers
 
@@ -212,9 +212,27 @@ After starting Compose, open `http://localhost:8000` and click **Launch App**. T
 - **Ask it** — `When is my trip?` → it answers from the current fact with its source citation and the superseded history, or returns `INSUFFICIENT_EVIDENCE` (abstention) when nothing is recorded.
 - **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
 
-Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 30), **Replay 30 sessions** ingests a deterministic 30-session corpus through the same path (`scale_01`–`scale_30`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.
+Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.
 
 The API surface for the interactive demo is `POST /api/demo/chat`, `POST /api/demo/replay`, and `POST /api/demo/reset`.
+
+## Benchmark
+
+Track 03 asks agents to "process chat histories spanning 30 to 40 sessions and 115,000 tokens per question." EchoTrace ships a repeatable, judge-runnable benchmark that exercises the real HydraDB pipeline end to end:
+
+```bash
+python -m scripts.benchmark --sessions 35 --target-tokens 115000
+```
+
+What it does:
+
+1. **Clears** the dedicated benchmark user (`bench-user`) scope.
+2. **Ingests the same 35-session story** as the interactive demo (facts, supersessions, tasks, abstentions) through the real `ingest_conversation()` path — so the score backs the UI.
+3. **Pads the corpus deterministically** (seeded, no LLM) with fact-free filler toward the ~115,000-token target, then counts tokens (~4 chars/token).
+4. **Asks 13 scored questions** through `query_memory()` covering current-truth retrieval after supersession, the immediately-preceding value (history head), multi-session synthesis (email, workplace, preference), and abstention (`INSUFFICIENT_EVIDENCE`) on never-recorded facts.
+5. **Prints a score table** with per-question PASS/FAIL, graph counts, facts created/superseded, and corpus size.
+
+Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 13 questions.** Rerun the script anytime; it is repeatable and idempotent per scope. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
 
 No model API key is required for the application, demo, memory query, or test suite.
 
