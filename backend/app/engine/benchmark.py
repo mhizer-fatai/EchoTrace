@@ -17,7 +17,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
-from backend.app.engine.memory import ingest_conversation, query_memory
+from backend.app.engine.memory import _memory_scope, ingest_conversation, query_memory
 from backend.app.engine.demo import DEMO_SCENARIO_STEPS
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
@@ -26,7 +26,6 @@ from backend.app.models.schemas import (
     MemoryQueryRequest,
 )
 
-BENCH_SESSION_ID = "memory:bench-user"
 BENCH_USER_ID = "bench-user"
 DEFAULT_TARGET_TOKENS = 115_000
 # Rough heuristic: ~4 chars per token for English prose.
@@ -139,9 +138,9 @@ def _normalize(value: str) -> str:
     return str(value).strip().lower()
 
 
-def _score_question(question: str, expected: str, opts: Dict[str, Any]) -> Tuple[bool, str]:
+def _score_question(question: str, expected: str, opts: Dict[str, Any], user_id: str) -> Tuple[bool, str]:
     result = query_memory(MemoryQueryRequest(
-        user_id=BENCH_USER_ID,
+        user_id=user_id,
         question=question,
         include_history=True,
     ))
@@ -184,8 +183,13 @@ def run_benchmark(
     session_count: int = 35,
     target_tokens: int = DEFAULT_TARGET_TOKENS,
     verbose: bool = True,
+    user_id: str | None = None,
 ) -> Dict[str, Any]:
-    graph_client.clear_session(BENCH_SESSION_ID)
+    # Use a fresh, uniquely-named scope per run. Clearing the previous run with
+    # a single DETACH DELETE would exceed HydraDB's server-side query timeout
+    # on the 600-node corpus, so each run writes to its own scope instead.
+    run_user = user_id or f"{BENCH_USER_ID}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    scope = _memory_scope(run_user)
 
     corpus = build_benchmark_corpus(session_count, target_tokens)
     total_messages = sum(len(messages) for _, messages in corpus)
@@ -195,7 +199,7 @@ def run_benchmark(
     superseded = 0
     for session_index, (session_id, messages) in enumerate(corpus):
         result = ingest_conversation(IngestConversationRequest(
-            user_id=BENCH_USER_ID,
+            user_id=run_user,
             session_id=session_id,
             messages=_statement(messages, session_index),
         ))
@@ -205,7 +209,7 @@ def run_benchmark(
     detail = []
     correct = 0
     for question, expected, opts in BENCH_QUESTIONS:
-        ok, reason = _score_question(question, expected, opts)
+        ok, reason = _score_question(question, expected, opts, run_user)
         if ok:
             correct += 1
         detail.append({
@@ -215,9 +219,10 @@ def run_benchmark(
             "reason": reason,
         })
 
-    graph = graph_client.get_session_graph(BENCH_SESSION_ID)
+    graph = graph_client.get_session_graph(scope)
     report = {
         "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
+        "scope": scope,
         "sessions": len(corpus),
         "messages": total_messages,
         "corpus_tokens": total_tokens,
@@ -240,6 +245,7 @@ def _format_report(report: Dict[str, Any]) -> str:
     lines.append("ECHOTRACE MEMORY BENCHMARK")
     lines.append("=" * 46)
     lines.append(f"Engine mode      : {report['engine_mode']}")
+    lines.append(f"Scope            : {report['scope']}")
     lines.append(f"Sessions         : {report['sessions']}")
     lines.append(f"Messages         : {report['messages']}")
     lines.append(f"Corpus size      : ~{report['corpus_tokens']:,} tokens")

@@ -226,13 +226,13 @@ python -m scripts.benchmark --sessions 35 --target-tokens 115000
 
 What it does:
 
-1. **Clears** the dedicated benchmark user (`bench-user`) scope.
+1. **Creates a fresh, uniquely-named scope** (`memory:bench-user-<timestamp>`) per run. No `DETACH DELETE` is needed, so reruns never hit HydraDB's server-side query timeout on the 600-node corpus — each run is fully isolated from the last.
 2. **Ingests the same 35-session story** as the interactive demo (facts, supersessions, tasks, abstentions) through the real `ingest_conversation()` path — so the score backs the UI.
 3. **Pads the corpus deterministically** (seeded, no LLM) with fact-free filler toward the ~115,000-token target, then counts tokens (~4 chars/token).
 4. **Asks 13 scored questions** through `query_memory()` covering current-truth retrieval after supersession, the immediately-preceding value (history head), multi-session synthesis (email, workplace, preference), and abstention (`INSUFFICIENT_EVIDENCE`) on never-recorded facts.
-5. **Prints a score table** with per-question PASS/FAIL, graph counts, facts created/superseded, and corpus size.
+5. **Prints a score table** with per-question PASS/FAIL, the run's scope, graph counts, facts created/superseded, and corpus size.
 
-Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 13 questions.** Rerun the script anytime; it is repeatable and idempotent per scope. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
+Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 13 questions.** Rerun the script anytime — it is repeatable and self-isolating per run. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
 
 No model API key is required for the application, demo, memory query, or test suite.
 
