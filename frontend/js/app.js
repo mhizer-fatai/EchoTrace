@@ -38,7 +38,7 @@ class App {
     });
     document.getElementById("demoChatForm")?.addEventListener("submit", (event) => this.submitChat(event));
     document.getElementById("btnNewChat")?.addEventListener("click", () => this.newChat());
-    document.getElementById("chatThread")?.addEventListener("click", (event) => {
+    document.getElementById("suggestionChips")?.addEventListener("click", (event) => {
       const chip = event.target.closest("[data-suggestion]");
       if (chip) {
         document.getElementById("demoChatInput").value = chip.getAttribute("data-suggestion");

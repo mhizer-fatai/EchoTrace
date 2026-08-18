@@ -463,11 +463,11 @@ def replay_scale_story() -> Dict[str, Any]:
 
 def _demo_response() -> Dict[str, Any]:
     answer = query_memory(MemoryQueryRequest(
-        user_id="demo-user",
+        user_id=DEMO_USER_ID,
         question="When is my trip?",
     ))
     abstention = query_memory(MemoryQueryRequest(
-        user_id="demo-user",
+        user_id=DEMO_USER_ID,
         question="Where did I go to university?",
     ))
     return {
@@ -491,7 +491,7 @@ def seed_memory_story() -> Dict[str, Any]:
         MessageNode(
             id="demo_msg_june",
             label="Session 04: trip planned for June",
-            user_id="demo-user",
+            user_id=DEMO_USER_ID,
             source_session_id="session_04",
             message_index=0,
             role="user",
@@ -503,7 +503,7 @@ def seed_memory_story() -> Dict[str, Any]:
         FactNode(
             id="demo_fact_june",
             label="Trip: June (superseded)",
-            entity="demo-user",
+            entity=DEMO_USER_ID,
             property_name="trip",
             property_value="June",
             status=FactStatus.SUPERSEDED,
@@ -520,7 +520,7 @@ def seed_memory_story() -> Dict[str, Any]:
         MessageNode(
             id="demo_msg_october",
             label="Session 18: trip moved to October",
-            user_id="demo-user",
+            user_id=DEMO_USER_ID,
             source_session_id="session_18",
             message_index=0,
             role="user",
@@ -532,7 +532,7 @@ def seed_memory_story() -> Dict[str, Any]:
         FactNode(
             id="demo_fact_october",
             label="Trip: October (current)",
-            entity="demo-user",
+            entity=DEMO_USER_ID,
             property_name="trip",
             property_value="October",
             status=FactStatus.VALID,

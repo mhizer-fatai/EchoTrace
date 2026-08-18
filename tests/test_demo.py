@@ -1,13 +1,30 @@
-from backend.app.engine.demo import DEMO_SESSION_ID, replay_scale_story, seed_memory_story
+import pytest
+
+from backend.app.engine import demo
 from backend.app.graph.client import graph_client
+from backend.app.engine.memory import query_memory
+from backend.app.models.schemas import MemoryQueryRequest
+
+
+TEST_SESSION_ID = "memory:test-demo"
+TEST_USER_ID = "test-demo"
+
+
+@pytest.fixture(autouse=True)
+def isolated_demo_scope(monkeypatch):
+    """Route every demo engine call into a throwaway scope so the tests
+    never write into the live demo-user graph the website reads."""
+    monkeypatch.setattr(demo, "DEMO_SESSION_ID", TEST_SESSION_ID)
+    monkeypatch.setattr(demo, "DEMO_USER_ID", TEST_USER_ID)
+    graph_client.clear_session(TEST_SESSION_ID)
+    yield
+    graph_client.clear_session(TEST_SESSION_ID)
 
 
 def test_memory_story_is_repeatable_and_connected():
-    graph_client.clear_session(DEMO_SESSION_ID)
-
-    first = seed_memory_story()
-    second = seed_memory_story()
-    graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    first = demo.seed_memory_story()
+    second = demo.seed_memory_story()
+    graph = graph_client.get_session_graph(TEST_SESSION_ID)
 
     assert first["answer"]["answer"] == "October"
     assert first["answer"]["history"][0]["value"] == "June"
@@ -21,11 +38,9 @@ def test_memory_story_is_repeatable_and_connected():
 
 
 def test_scale_story_replays_through_real_memory_pipeline_idempotently():
-    graph_client.clear_session(DEMO_SESSION_ID)
-
-    first = replay_scale_story()
-    second = replay_scale_story()
-    graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    first = demo.replay_scale_story()
+    second = demo.replay_scale_story()
+    graph = graph_client.get_session_graph(TEST_SESSION_ID)
     nodes = graph["nodes"]
     edges = graph["edges"]
 
@@ -42,14 +57,10 @@ def test_scale_story_replays_through_real_memory_pipeline_idempotently():
 
 
 def test_multi_hop_query_walks_timeline_across_properties():
-    from backend.app.engine.memory import query_memory
-    from backend.app.models.schemas import MemoryQueryRequest
-
-    graph_client.clear_session(DEMO_SESSION_ID)
-    replay_scale_story()
+    demo.replay_scale_story()
 
     workplace = query_memory(MemoryQueryRequest(
-        user_id="demo-user",
+        user_id=TEST_USER_ID,
         question="Which workplace was active when my trip was in July?",
     ))
     assert workplace.status == "ANSWERED"
@@ -59,7 +70,7 @@ def test_multi_hop_query_walks_timeline_across_properties():
     assert workplace.anchor_value == "July"
 
     email = query_memory(MemoryQueryRequest(
-        user_id="demo-user",
+        user_id=TEST_USER_ID,
         question="What was my work email when my trip was in July?",
     ))
     assert email.status == "ANSWERED"
@@ -67,7 +78,7 @@ def test_multi_hop_query_walks_timeline_across_properties():
     assert email.property_name == "work_email"
 
     snapshot = query_memory(MemoryQueryRequest(
-        user_id="demo-user",
+        user_id=TEST_USER_ID,
         question="What was my trip?",
         as_of="2026-08-16T09:10:00+00:00",
     ))
