@@ -62,6 +62,22 @@ If port 8000 is occupied, set `ECHOTRACE_PUBLISHED_PORT` before starting Compose
 
 Compose follows HydraDB v0.1.1's single-node local-storage contract. Durable files are written under `hydradb-data/store`, disposable cache files under `hydradb-data/cache`, and readiness is checked through the admin endpoint on port `9090`.
 
+### Fresh-store reset and recovery
+
+HydraDB's local object-store path has an upstream limitation: repeated in-place `DETACH DELETE` operations can degrade as the WAL grows and eventually produce `client_query_runtime exceeded query timeout after 29999 ms` / `Transaction.Terminated`. EchoTrace avoids issuing destructive in-place clears, uses fresh scopes for integration tests, and runs a health watchdog. If a degraded store is detected, the app attempts an automatic reset when Docker socket access is available; otherwise it switches to the internal graph engine and displays the reason in the UI.
+
+To manually start clean before a demo or after a degraded store:
+
+```powershell
+./scripts/reset_store.ps1
+```
+
+```bash
+./scripts/reset_store.sh
+```
+
+The fresh-store workaround is also independently documented against the same HydraDB image in [hydrabuild's HydraDB node notes](https://github.com/Charles-ace/hydrabuild/blob/master/docs/hydradb-node.md).
+
 EchoTrace maps its readable string node IDs to deterministic 63-bit HydraDB vertex IDs. The original IDs remain available as `echotrace_id`, while HydraDB's native integer IDs drive adjacency and traversal.
 
 Relevant environment variables:
@@ -74,6 +90,9 @@ Relevant environment variables:
 | `EXECUTOR_ALLOWED_HOSTS` | Comma-separated webhook host allowlist | empty |
 | `EXECUTOR_TIMEOUT_SECONDS` | Per-node execution timeout | `30` |
 | `EXECUTOR_BEARER_TOKEN` | Optional shared bearer credential | empty |
+| `HYDRADB_WATCHDOG_INTERVAL` | Health probe interval in seconds | `15` |
+| `HYDRADB_PROBE_TIMEOUT` | HydraDB Bolt probe timeout in seconds | `8` |
+| `HYDRADB_AUTO_RESET` | Reset the local store when Docker socket recovery is available | `false` |
 
 Set `USE_IN_MEMORY_FALLBACK=false` outside local development. At least one host must be present in `EXECUTOR_ALLOWED_HOSTS` before stale nodes can be executed.
 

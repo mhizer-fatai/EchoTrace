@@ -14,6 +14,7 @@ from backend.app.engine.demo import ingest_demo_message, replay_scale_story, res
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.memory import ingest_conversation, query_memory
+from backend.app.engine.watchdog import store_watchdog
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
     AutoHealResponse,
@@ -61,6 +62,8 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    if not store_watchdog.is_alive():
+        store_watchdog.start()
 
 
 # API Endpoints
@@ -73,6 +76,11 @@ def get_health() -> Dict[str, Any]:
         "version": settings.app_version,
         "hydradb_connected": graph_client.connected_to_hydradb,
         "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
+        "hydradb_degraded": graph_client.store_degraded,
+        "hydradb_degraded_reason": graph_client.degraded_reason,
+        "store_last_probe": store_watchdog.last_probe_at,
+        "store_last_recovery": store_watchdog.last_recovery_at,
+        "store_recovery_count": store_watchdog.recovery_count,
     }
 
 

@@ -52,8 +52,15 @@ services:
       - HYDRADB_AUTH_TOKEN=local-development-token-32-bytes
       - HYDRADB_ALLOW_PLAINTEXT=true
       - USE_IN_MEMORY_FALLBACK=false
+      - HYDRADB_AUTO_RESET=true
+      - HYDRADB_CONTAINER_NAME=echotrace-hydradb
+      - HYDRADB_DOCKER_SOCKET=/var/run/docker.sock
+      - HYDRADB_LOCAL_DATA_DIR=/hydradb-data
       - EXECUTOR_ALLOWED_HOSTS=host.docker.internal
       - EXECUTOR_TIMEOUT_SECONDS=30
+    volumes:
+      - ./hydradb-data:/hydradb-data
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       hydradb:
         condition: service_healthy

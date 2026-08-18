@@ -1,12 +1,12 @@
 import pytest
+import uuid
 from datetime import datetime, timezone, timedelta
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import FactNode, FactStatus, GraphEdge, EdgeType, NodeKind
 
 
 def test_graph_node_and_edge_insertions():
-    session_id = "test_graph_queries_session"
-    graph_client.clear_session(session_id)
+    session_id = f"test_graph_queries_session_{uuid.uuid4().hex[:10]}"
     now = datetime.now(timezone.utc)
 
     fact1 = FactNode(
@@ -29,8 +29,7 @@ def test_graph_node_and_edge_insertions():
 
 
 def test_temporal_graph_snapshot():
-    session_id = "test_temporal_session"
-    graph_client.clear_session(session_id)
+    session_id = f"test_temporal_session_{uuid.uuid4().hex[:10]}"
     t0 = datetime.now(timezone.utc) - timedelta(days=2)
     t1 = datetime.now(timezone.utc) - timedelta(days=1)
     t2 = datetime.now(timezone.utc)

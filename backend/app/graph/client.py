@@ -176,6 +176,8 @@ class HydraDBClient:
         self.bolt_driver = None
         self.in_memory = InMemoryGraphStore()
         self.connected_to_hydradb = False
+        self.store_degraded = False
+        self.degraded_reason: Optional[str] = None
         self._init_connection()
 
     def _init_connection(self):
@@ -197,6 +199,8 @@ class HydraDBClient:
                     "MATCH (n:EchoTraceNode) RETURN count(*) AS node_count"
                 ).consume()
             self.connected_to_hydradb = True
+            self.store_degraded = False
+            self.degraded_reason = None
             logger.info("Successfully connected to HydraDB via Bolt")
         except Exception as exc:
             self.connected_to_hydradb = False
@@ -212,6 +216,17 @@ class HydraDBClient:
                 f"HydraDB not reachable at {settings.hydradb_bolt_uri}. "
                 f"Using internal high-performance graph engine. (Reason: {exc})"
             )
+
+    def reconnect(self) -> bool:
+        if self.bolt_driver:
+            try:
+                self.bolt_driver.close()
+            except Exception:
+                pass
+        self.bolt_driver = None
+        self.connected_to_hydradb = False
+        self._init_connection()
+        return self.connected_to_hydradb
 
     def execute_cypher(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -479,9 +494,10 @@ class HydraDBClient:
         if not self.connected_to_hydradb:
             self.in_memory.clear_session(session_id)
             return
-        self.execute_cypher(
-            "MATCH (n:EchoTraceNode {session_id: $session_id}) DETACH DELETE n",
-            {"session_id": session_id},
+        logger.warning(
+            "Skipping HydraDB clear for %s: DETACH DELETE degrades on a growing "
+            "local WAL. Use a fresh scope or scripts/reset_store instead.",
+            session_id,
         )
 
 

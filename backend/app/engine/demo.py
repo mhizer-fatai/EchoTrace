@@ -424,11 +424,15 @@ def ingest_demo_message(
 
 
 def reset_demo_story() -> Dict[str, Any]:
-    graph_client.clear_session(DEMO_SESSION_ID)
     return {
-        "status": "cleared",
+        "status": "fresh_store_required",
         "session_id": DEMO_SESSION_ID,
         "user_id": DEMO_USER_ID,
+        "message": (
+            "In-place HydraDB reset is disabled because DETACH DELETE degrades "
+            "on a growing local WAL. Run scripts/reset_store.ps1 or "
+            "scripts/reset_store.sh for a clean store."
+        ),
         "hydradb_connected": graph_client.connected_to_hydradb,
         "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
     }

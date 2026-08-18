@@ -14,6 +14,12 @@ class Settings(BaseModel):
     hydradb_auth_token: str = os.getenv("HYDRADB_AUTH_TOKEN", "local-development-token-32-bytes")
     hydradb_allow_plaintext: bool = os.getenv("HYDRADB_ALLOW_PLAINTEXT", "true").lower() == "true"
     use_in_memory_fallback: bool = os.getenv("USE_IN_MEMORY_FALLBACK", "false").lower() == "true"
+    hydradb_watchdog_interval: float = float(os.getenv("HYDRADB_WATCHDOG_INTERVAL", "15"))
+    hydradb_probe_timeout: float = float(os.getenv("HYDRADB_PROBE_TIMEOUT", "8"))
+    hydradb_auto_reset: bool = os.getenv("HYDRADB_AUTO_RESET", "false").lower() == "true"
+    hydradb_container_name: str = os.getenv("HYDRADB_CONTAINER_NAME", "echotrace-hydradb")
+    hydradb_docker_socket: str = os.getenv("HYDRADB_DOCKER_SOCKET", "/var/run/docker.sock")
+    hydradb_local_data_dir: str = os.getenv("HYDRADB_LOCAL_DATA_DIR", "/hydradb-data")
 
     # Agent executor configuration
     executor_timeout_seconds: float = float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "30"))

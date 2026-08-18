@@ -13,7 +13,6 @@ from backend.app.models.schemas import (
 
 
 def load_workflow(session_id: str) -> None:
-    graph_client.clear_session(session_id)
     now = datetime.now(timezone.utc)
     nodes = [
         AgentNode(

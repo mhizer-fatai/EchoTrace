@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import uuid
 
 import pytest
 
@@ -13,8 +14,7 @@ from backend.app.models.schemas import (
 
 
 def test_cross_session_memory_returns_current_value_and_history():
-    user_id = "memory_user_temporal"
-    graph_client.clear_session(f"memory:{user_id}")
+    user_id = f"memory_user_temporal_{uuid.uuid4().hex[:10]}"
     first = datetime.now(timezone.utc) - timedelta(days=10)
     latest = datetime.now(timezone.utc)
 
@@ -50,8 +50,7 @@ def test_cross_session_memory_returns_current_value_and_history():
 
 
 def test_memory_query_abstains_without_supporting_evidence():
-    user_id = "memory_user_abstention"
-    graph_client.clear_session(f"memory:{user_id}")
+    user_id = f"memory_user_abstention_{uuid.uuid4().hex[:10]}"
     ingest_conversation(IngestConversationRequest(
         user_id=user_id,
         session_id="session_01",
@@ -69,8 +68,7 @@ def test_memory_query_abstains_without_supporting_evidence():
 
 
 def test_explicit_memory_claims_support_unstructured_messages():
-    user_id = "memory_user_explicit"
-    graph_client.clear_session(f"memory:{user_id}")
+    user_id = f"memory_user_explicit_{uuid.uuid4().hex[:10]}"
     result = ingest_conversation(IngestConversationRequest(
         user_id=user_id,
         session_id="session_09",

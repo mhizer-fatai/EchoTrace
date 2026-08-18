@@ -13,6 +13,7 @@ class App {
     this.initializeScrollStory();
     this.showView(this.currentView, false);
     this.checkHealth();
+    this.healthPoll = window.setInterval(() => this.checkHealth(), 10000);
     if (this.currentView === "studio") this.openStudio();
   }
 
@@ -129,6 +130,16 @@ class App {
       const health = await API.getHealth();
       status.textContent = health.engine_mode.toUpperCase();
       status.className = health.hydradb_connected ? "hidden font-mono text-[10px] text-status-healthy sm:inline" : "hidden font-mono text-[10px] text-status-warning sm:inline";
+      const banner = document.getElementById("storeDegradedBanner");
+      if (banner) {
+        if (health.hydradb_degraded) {
+          const reason = health.hydradb_degraded_reason || "HydraDB query health checks failed.";
+          banner.textContent = `HydraDB store degraded: ${reason} EchoTrace is using its internal graph engine so the session remains usable. Run scripts/reset_store.ps1 (Windows) or scripts/reset_store.sh to restore HydraDB.`;
+          banner.classList.remove("hidden");
+        } else {
+          banner.classList.add("hidden");
+        }
+      }
     } catch (error) {
       status.textContent = "BACKEND OFFLINE";
       status.className = "hidden font-mono text-[10px] text-status-warning sm:inline";
