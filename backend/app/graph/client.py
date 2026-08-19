@@ -239,7 +239,7 @@ class HydraDBClient:
                     return [record.data() for record in result]
             except Exception as exc:
                 # Bolt connections can become stale after HydraDB restarts or a
-                # long idle period. Reconnect once so the first demo click does
+                # long idle period. Reconnect once so the first studio click does
                 # not fail while the graph itself remains healthy.
                 logger.warning("HydraDB query failed; reconnecting once: %s", exc)
                 try:

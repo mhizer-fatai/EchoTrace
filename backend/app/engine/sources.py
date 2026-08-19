@@ -22,12 +22,12 @@ class SourceAssertRequest(BaseModel):
     explicit change supersedes all of them.
     """
 
-    session_id: str = "memory:demo-user"
-    entity: str = "demo-user"
+    session_id: str = "memory:studio-user"
+    entity: str = "studio-user"
     property_name: str = "trip"
     property_value: str = "July"
     source_session_id: str = "session_05"
-    source_agent_id: Optional[str] = "demo_agent_flight_agent"
+    source_agent_id: Optional[str] = "studio_agent_flight_agent"
     quote: Optional[str] = "My trip is in July."
 
 

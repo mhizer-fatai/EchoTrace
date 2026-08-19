@@ -1,28 +1,28 @@
 import pytest
 import uuid
 
-from backend.app.engine import demo
+from backend.app.engine import studio
 from backend.app.graph.client import graph_client
 from backend.app.engine.memory import query_memory
 from backend.app.models.schemas import MemoryQueryRequest
 
 
 @pytest.fixture(autouse=True)
-def isolated_demo_scope(monkeypatch):
-    """Route every demo engine call into a throwaway scope so the tests
-    never write into the live demo-user graph the website reads."""
+def isolated_studio_scope(monkeypatch):
+    """Route every studio engine call into a throwaway scope so the tests
+    never write into the live studio-user graph the website reads."""
     suffix = uuid.uuid4().hex[:10]
-    session_id = f"memory:test-demo-{suffix}"
-    user_id = f"test-demo-{suffix}"
-    monkeypatch.setattr(demo, "DEMO_SESSION_ID", session_id)
-    monkeypatch.setattr(demo, "DEMO_USER_ID", user_id)
+    session_id = f"memory:test-studio-{suffix}"
+    user_id = f"test-studio-{suffix}"
+    monkeypatch.setattr(studio, "STUDIO_SESSION_ID", session_id)
+    monkeypatch.setattr(studio, "STUDIO_USER_ID", user_id)
     yield session_id, user_id
 
 
-def test_memory_story_is_repeatable_and_connected(isolated_demo_scope):
-    session_id, _ = isolated_demo_scope
-    first = demo.seed_memory_story()
-    second = demo.seed_memory_story()
+def test_memory_story_is_repeatable_and_connected(isolated_studio_scope):
+    session_id, _ = isolated_studio_scope
+    first = studio.seed_memory_story()
+    second = studio.seed_memory_story()
     graph = graph_client.get_session_graph(session_id)
 
     assert first["answer"]["answer"] == "October"
@@ -36,10 +36,10 @@ def test_memory_story_is_repeatable_and_connected(isolated_demo_scope):
     }
 
 
-def test_scale_story_replays_through_real_memory_pipeline_idempotently(isolated_demo_scope):
-    session_id, _ = isolated_demo_scope
-    first = demo.replay_scale_story()
-    second = demo.replay_scale_story()
+def test_scale_story_replays_through_real_memory_pipeline_idempotently(isolated_studio_scope):
+    session_id, _ = isolated_studio_scope
+    first = studio.replay_scale_story()
+    second = studio.replay_scale_story()
     graph = graph_client.get_session_graph(session_id)
     nodes = graph["nodes"]
     edges = graph["edges"]
@@ -56,9 +56,9 @@ def test_scale_story_replays_through_real_memory_pipeline_idempotently(isolated_
     assert any("university" in node.get("content", "").lower() for node in nodes if node["kind"] == "MESSAGE")
 
 
-def test_multi_hop_query_walks_timeline_across_properties(isolated_demo_scope):
-    _, user_id = isolated_demo_scope
-    demo.replay_scale_story()
+def test_multi_hop_query_walks_timeline_across_properties(isolated_studio_scope):
+    _, user_id = isolated_studio_scope
+    studio.replay_scale_story()
 
     workplace = query_memory(MemoryQueryRequest(
         user_id=user_id,

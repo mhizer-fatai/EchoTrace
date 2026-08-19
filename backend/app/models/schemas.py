@@ -227,7 +227,7 @@ class IngestConversationResponse(BaseModel):
     memories_superseded: List[str]
 
 
-class DemoChatRequest(BaseModel):
+class StudioChatRequest(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
     session_id: Optional[str] = Field(default=None, max_length=100)
 

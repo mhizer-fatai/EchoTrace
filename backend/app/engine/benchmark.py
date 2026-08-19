@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
 from backend.app.engine.memory import _memory_scope, ingest_conversation, query_memory
-from backend.app.engine.demo import DEMO_SCENARIO_STEPS
+from backend.app.engine.studio import STORY_SCENARIO_STEPS
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
     ConversationMessage,
@@ -35,7 +35,7 @@ _CHARS_PER_TOKEN = 4.0
 # corpus toward the 115k-token scale target without changing any answer.
 _FILLER_POOL = [
     "The morning standup covered the release timeline and the incident from Tuesday.",
-    "We scheduled a follow-up design review for next week after the demo feedback.",
+    "We scheduled a follow-up design review for next week after the product feedback.",
     "The build pipeline ran clean on the latest commit before lunch.",
     "I reviewed the onboarding notes and left comments on the migration plan.",
     "The client asked for a status update on the rollout schedule.",
@@ -76,12 +76,12 @@ def build_benchmark_corpus(
 ) -> List[Tuple[str, List[str]]]:
     """Return [(session_id, [message, ...]), ...] padded toward target_tokens.
 
-    The first session_count prompts come from the 35-session demo story so the
+    The first session_count prompts come from the 35-session studio story so the
     benchmark and the interactive UI exercise the same facts and supersessions.
     The remaining messages are deterministic filler that carries no facts.
     """
     rng = random.Random(seed)
-    story_prompts = [step["prompt"] for step in DEMO_SCENARIO_STEPS]
+    story_prompts = [step["prompt"] for step in STORY_SCENARIO_STEPS]
 
     sessions: List[Tuple[str, List[str]]] = []
     for index in range(1, session_count + 1):

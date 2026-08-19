@@ -19,20 +19,20 @@ from backend.app.models.schemas import (
 )
 
 
-DEMO_SESSION_ID = "memory:demo-user"
-DEMO_USER_ID = "demo-user"
-DEMO_MAX_SESSIONS = 35
-DEMO_NODE_IDS = {
-    "demo_msg_june",
-    "demo_fact_june",
-    "demo_msg_october",
-    "demo_fact_october",
-    "demo_agent_planner",
-    "demo_decision_itinerary",
-    "demo_artifact_itinerary",
+STUDIO_SESSION_ID = "memory:studio-user"
+STUDIO_USER_ID = "studio-user"
+STUDIO_MAX_SESSIONS = 35
+STORY_NODE_IDS = {
+    "story_msg_june",
+    "story_fact_june",
+    "story_msg_october",
+    "story_fact_october",
+    "story_agent_planner",
+    "story_decision_itinerary",
+    "story_artifact_itinerary",
 }
 
-DEMO_SCENARIO_STEPS = [
+STORY_SCENARIO_STEPS = [
     {"session_id": "session_01", "prompt": "My trip is in June.", "description": "Trip planned for June"},
     {"session_id": "session_02", "prompt": "I work at Acme Corp.", "description": "Workplace: Acme Corp"},
     {"session_id": "session_03", "prompt": "My work email is sarah@acme.com.", "description": "Email: sarah@acme.com"},
@@ -70,7 +70,7 @@ DEMO_SCENARIO_STEPS = [
     {"session_id": "session_35", "prompt": "Plan my trip itinerary.", "description": "Execute task using current memory (November)"},
 ]
 
-DEMO_SCALE_SCRIPT = [item["prompt"] for item in DEMO_SCENARIO_STEPS]
+STORY_SCALE_SCRIPT = [item["prompt"] for item in STORY_SCENARIO_STEPS]
 
 
 def _fact_summary(fact_id: str) -> Dict[str, str]:
@@ -84,7 +84,7 @@ def _fact_summary(fact_id: str) -> Dict[str, str]:
 
 
 def _next_live_session_id() -> str:
-    graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
     numbers = []
     for node in graph.get("nodes", []):
         if node.get("kind") != "MESSAGE":
@@ -119,20 +119,20 @@ def _is_task(text: str) -> bool:
 
 
 def _current_active_fact(property_name: str) -> Optional[Dict[str, Any]]:
-    graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
     candidates = [
         node for node in graph.get("nodes", [])
         if node.get("kind") == "FACT"
         and node.get("property_name") == property_name
         and node.get("status") == FactStatus.VALID.value
-        and node.get("entity") == DEMO_USER_ID
+        and node.get("entity") == STUDIO_USER_ID
     ]
     if not candidates:
         return None
     return max(candidates, key=lambda node: str(node.get("valid_from", "")))
 
 
-def _execute_demo_task(content: str, source_session_id: str, occurred_at: datetime) -> Dict[str, Any]:
+def _execute_studio_task(content: str, source_session_id: str, occurred_at: datetime) -> Dict[str, Any]:
     clean = content.strip().lower()
     property_name = "trip" if "trip" in clean else ("workplace" if "work" in clean else "email" if "email" in clean else "trip")
     current_fact = _current_active_fact(property_name)
@@ -145,16 +145,16 @@ def _execute_demo_task(content: str, source_session_id: str, occurred_at: dateti
         }
 
     task_slug = source_session_id.replace(":", "_").replace(" ", "_")
-    agent_id = f"demo_agent_{task_slug}"
-    decision_id = f"demo_decision_{task_slug}"
-    artifact_id = f"demo_artifact_{task_slug}"
+    agent_id = f"story_agent_{task_slug}"
+    decision_id = f"story_decision_{task_slug}"
+    artifact_id = f"story_artifact_{task_slug}"
 
     agent = AgentNode(
         id=agent_id,
         label="Travel Planner",
         agent_name="Travel Planner",
         role="itinerary agent",
-        session_id=DEMO_SESSION_ID,
+        session_id=STUDIO_SESSION_ID,
         created_at=occurred_at,
         valid_from=occurred_at,
     )
@@ -164,8 +164,8 @@ def _execute_demo_task(content: str, source_session_id: str, occurred_at: dateti
         agent_id=agent_id,
         action_type=f"Plan {property_name.replace('_', ' ')}",
         rationale=f"Latest supported {property_name.replace('_', ' ')} is {current_fact['property_value']}.",
-        executor_url="http://host.docker.internal:8001/demo/decision",
-        session_id=DEMO_SESSION_ID,
+        executor_url="http://host.docker.internal:8001/studio/decision",
+        session_id=STUDIO_SESSION_ID,
         created_at=occurred_at,
         valid_from=occurred_at,
     )
@@ -175,8 +175,8 @@ def _execute_demo_task(content: str, source_session_id: str, occurred_at: dateti
         artifact_name=f"{current_fact['property_value'].lower()}_itinerary.md",
         content=f"# {current_fact['property_value']} trip\n\nThe itinerary uses the current memory from {current_fact.get('metadata', {}).get('source_session_id', source_session_id)}.",
         artifact_type="document",
-        executor_url="http://host.docker.internal:8001/demo/artifact",
-        session_id=DEMO_SESSION_ID,
+        executor_url="http://host.docker.internal:8001/studio/artifact",
+        session_id=STUDIO_SESSION_ID,
         created_at=occurred_at,
         valid_from=occurred_at,
     )
@@ -219,7 +219,7 @@ def _execute_demo_task(content: str, source_session_id: str, occurred_at: dateti
     }
 
 
-def ingest_demo_message(
+def ingest_studio_message(
     content: str,
     session_id: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
@@ -230,13 +230,13 @@ def ingest_demo_message(
     source_session_id = session_id or _next_live_session_id()
     now = occurred_at or datetime.now(timezone.utc)
 
-    existing = graph_client.get_session_graph(DEMO_SESSION_ID).get("nodes", [])
-    if session_id is None and _session_number(source_session_id) > DEMO_MAX_SESSIONS:
+    existing = graph_client.get_session_graph(STUDIO_SESSION_ID).get("nodes", [])
+    if session_id is None and _session_number(source_session_id) > STUDIO_MAX_SESSIONS:
         return {
             "session_id": source_session_id,
             "content": content,
             "assistant_reply": (
-                f"You've reached the **{DEMO_MAX_SESSIONS}-session cap** for this demo memory. "
+                f"You've reached the **{STUDIO_MAX_SESSIONS}-session cap** for this studio memory. "
                 f"Cross-session memory is fully populated — start a new chat thread on a fresh store to begin again."
             ),
             "is_query": False,
@@ -249,7 +249,7 @@ def ingest_demo_message(
             "hydradb_connected": graph_client.connected_to_hydradb,
             "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
             "node_count": len(existing),
-            "edge_count": len(graph_client.get_session_graph(DEMO_SESSION_ID).get("edges", [])),
+            "edge_count": len(graph_client.get_session_graph(STUDIO_SESSION_ID).get("edges", [])),
         }
 
     already_recorded = any(
@@ -271,7 +271,7 @@ def ingest_demo_message(
             "hydradb_connected": graph_client.connected_to_hydradb,
             "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
             "node_count": len(existing),
-            "edge_count": len(graph_client.get_session_graph(DEMO_SESSION_ID).get("edges", [])),
+            "edge_count": len(graph_client.get_session_graph(STUDIO_SESSION_ID).get("edges", [])),
         }
 
     if _is_task(content):
@@ -279,17 +279,17 @@ def ingest_demo_message(
         graph_client.add_node(MessageNode(
             id=msg_id,
             label=f"{source_session_id}: {content[:30]}",
-            user_id=DEMO_USER_ID,
+            user_id=STUDIO_USER_ID,
             source_session_id=source_session_id,
             message_index=0,
             role="user",
             content=content,
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=now,
             valid_from=now,
         ))
-        task_result = _execute_demo_task(content, source_session_id, now)
-        current_graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+        task_result = _execute_studio_task(content, source_session_id, now)
+        current_graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
         return {
             "session_id": source_session_id,
             "content": content,
@@ -316,18 +316,18 @@ def ingest_demo_message(
         graph_client.add_node(MessageNode(
             id=msg_id,
             label=f"{source_session_id}: {content[:30]}",
-            user_id=DEMO_USER_ID,
+            user_id=STUDIO_USER_ID,
             source_session_id=source_session_id,
             message_index=0,
             role="user",
             content=content,
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=now,
             valid_from=now,
         ))
 
         query_res = query_memory(MemoryQueryRequest(
-            user_id=DEMO_USER_ID,
+            user_id=STUDIO_USER_ID,
             question=content,
             include_history=True,
         ))
@@ -370,7 +370,7 @@ def ingest_demo_message(
         else:
             reply = f"I don't have any recorded memory regarding '{content}'.\n\n🛡️ **Status:** `INSUFFICIENT_EVIDENCE`\nEchoTrace abstains from answering rather than hallucinating an unrecorded fact."
 
-        current_graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+        current_graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
         return {
             "session_id": source_session_id,
             "content": content,
@@ -399,7 +399,7 @@ def ingest_demo_message(
         for name, value in _extract_message_claims(message)
     ]
     result = ingest_conversation(IngestConversationRequest(
-        user_id=DEMO_USER_ID,
+        user_id=STUDIO_USER_ID,
         session_id=source_session_id,
         messages=[message],
     ))
@@ -417,7 +417,7 @@ def ingest_demo_message(
     else:
         reply = "Noted your message in this session history."
 
-    current_graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    current_graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
     return {
         "session_id": source_session_id,
         "content": content,
@@ -435,11 +435,11 @@ def ingest_demo_message(
     }
 
 
-def reset_demo_story() -> Dict[str, Any]:
+def reset_studio_story() -> Dict[str, Any]:
     return {
         "status": "fresh_store_required",
-        "session_id": DEMO_SESSION_ID,
-        "user_id": DEMO_USER_ID,
+        "session_id": STUDIO_SESSION_ID,
+        "user_id": STUDIO_USER_ID,
         "message": (
             "In-place HydraDB reset is disabled because DETACH DELETE degrades "
             "on a growing local WAL. Run scripts/reset_store.ps1 or "
@@ -453,20 +453,20 @@ def reset_demo_story() -> Dict[str, Any]:
 def replay_scale_story() -> Dict[str, Any]:
     start = datetime(2026, 8, 16, 9, 0, tzinfo=timezone.utc)
     steps = [
-        ingest_demo_message(
+        ingest_studio_message(
             content,
             session_id=f"scale_{index:02d}",
             occurred_at=start + timedelta(minutes=index),
         )
-        for index, content in enumerate(DEMO_SCALE_SCRIPT, start=1)
+        for index, content in enumerate(STORY_SCALE_SCRIPT, start=1)
     ]
-    graph = graph_client.get_session_graph(DEMO_SESSION_ID)
+    graph = graph_client.get_session_graph(STUDIO_SESSION_ID)
     return {
-        "user_id": DEMO_USER_ID,
-        "session_id": DEMO_SESSION_ID,
+        "user_id": STUDIO_USER_ID,
+        "session_id": STUDIO_SESSION_ID,
         "hydradb_connected": graph_client.connected_to_hydradb,
         "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
-        "sessions_requested": len(DEMO_SCALE_SCRIPT),
+        "sessions_requested": len(STORY_SCALE_SCRIPT),
         "sessions_ingested": sum(not step["skipped"] for step in steps),
         "sessions_skipped": sum(step["skipped"] for step in steps),
         "memories_created": sum(len(step["created"]) for step in steps),
@@ -477,17 +477,17 @@ def replay_scale_story() -> Dict[str, Any]:
     }
 
 
-def _demo_response() -> Dict[str, Any]:
+def _studio_response() -> Dict[str, Any]:
     answer = query_memory(MemoryQueryRequest(
-        user_id=DEMO_USER_ID,
+        user_id=STUDIO_USER_ID,
         question="When is my trip?",
     ))
     abstention = query_memory(MemoryQueryRequest(
-        user_id=DEMO_USER_ID,
+        user_id=STUDIO_USER_ID,
         question="Where did I go to university?",
     ))
     return {
-        "session_id": DEMO_SESSION_ID,
+        "session_id": STUDIO_SESSION_ID,
         "question": "When is my trip?",
         "answer": answer.model_dump(),
         "unsupported_question_status": abstention.status,
@@ -495,35 +495,35 @@ def _demo_response() -> Dict[str, Any]:
 
 
 def seed_memory_story() -> Dict[str, Any]:
-    existing = graph_client.get_session_graph(DEMO_SESSION_ID)
+    existing = graph_client.get_session_graph(STUDIO_SESSION_ID)
     existing_ids = {node["id"] for node in existing.get("nodes", [])}
-    if DEMO_NODE_IDS.issubset(existing_ids) and len(existing.get("edges", [])) >= 6:
-        return _demo_response()
+    if STORY_NODE_IDS.issubset(existing_ids) and len(existing.get("edges", [])) >= 6:
+        return _studio_response()
 
     june_at = datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc)
     october_at = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
     decision_at = datetime(2026, 8, 15, 12, 5, tzinfo=timezone.utc)
     nodes = [
         MessageNode(
-            id="demo_msg_june",
+            id="story_msg_june",
             label="Session 04: trip planned for June",
-            user_id=DEMO_USER_ID,
+            user_id=STUDIO_USER_ID,
             source_session_id="session_04",
             message_index=0,
             role="user",
             content="My trip is in June.",
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=june_at,
             valid_from=june_at,
         ),
         FactNode(
-            id="demo_fact_june",
+            id="story_fact_june",
             label="Trip: June (superseded)",
-            entity=DEMO_USER_ID,
+            entity=STUDIO_USER_ID,
             property_name="trip",
             property_value="June",
             status=FactStatus.SUPERSEDED,
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=june_at,
             valid_from=june_at,
             valid_to=october_at,
@@ -534,25 +534,25 @@ def seed_memory_story() -> Dict[str, Any]:
             },
         ),
         MessageNode(
-            id="demo_msg_october",
+            id="story_msg_october",
             label="Session 18: trip moved to October",
-            user_id=DEMO_USER_ID,
+            user_id=STUDIO_USER_ID,
             source_session_id="session_18",
             message_index=0,
             role="user",
             content="I moved my trip to October.",
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=october_at,
             valid_from=october_at,
         ),
         FactNode(
-            id="demo_fact_october",
+            id="story_fact_october",
             label="Trip: October (current)",
-            entity=DEMO_USER_ID,
+            entity=STUDIO_USER_ID,
             property_name="trip",
             property_value="October",
             status=FactStatus.VALID,
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=october_at,
             valid_from=october_at,
             metadata={
@@ -562,33 +562,33 @@ def seed_memory_story() -> Dict[str, Any]:
             },
         ),
         AgentNode(
-            id="demo_agent_planner",
+            id="story_agent_planner",
             label="Travel Planner",
             agent_name="Travel Planner",
             role="itinerary agent",
-            session_id=DEMO_SESSION_ID,
+            session_id=STUDIO_SESSION_ID,
             created_at=decision_at,
             valid_from=decision_at,
         ),
         DecisionNode(
-            id="demo_decision_itinerary",
+            id="story_decision_itinerary",
             label="Plan the October itinerary",
-            agent_id="demo_agent_planner",
+            agent_id="story_agent_planner",
             action_type="Plan October trip",
             rationale="The latest supported trip month is October.",
-            executor_url="http://host.docker.internal:8001/demo/decision",
-            session_id=DEMO_SESSION_ID,
+            executor_url="http://host.docker.internal:8001/studio/decision",
+            session_id=STUDIO_SESSION_ID,
             created_at=decision_at,
             valid_from=decision_at,
         ),
         ArtifactNode(
-            id="demo_artifact_itinerary",
+            id="story_artifact_itinerary",
             label="October itinerary",
             artifact_name="october_itinerary.md",
             content="# October trip\n\nThe itinerary uses the current memory from session 18.",
             artifact_type="document",
-            executor_url="http://host.docker.internal:8001/demo/artifact",
-            session_id=DEMO_SESSION_ID,
+            executor_url="http://host.docker.internal:8001/studio/artifact",
+            session_id=STUDIO_SESSION_ID,
             created_at=decision_at,
             valid_from=decision_at,
         ),
@@ -597,14 +597,14 @@ def seed_memory_story() -> Dict[str, Any]:
         graph_client.add_node(node)
 
     edges = [
-        GraphEdge(id="demo_edge_june_source", source_id="demo_fact_june", target_id="demo_msg_june", edge_type=EdgeType.SUPPORTED_BY, created_at=june_at),
-        GraphEdge(id="demo_edge_october_source", source_id="demo_fact_october", target_id="demo_msg_october", edge_type=EdgeType.SUPPORTED_BY, created_at=october_at),
-        GraphEdge(id="demo_edge_superseded", source_id="demo_fact_june", target_id="demo_fact_october", edge_type=EdgeType.SUPERSEDED_BY, created_at=october_at),
-        GraphEdge(id="demo_edge_agent_decision", source_id="demo_agent_planner", target_id="demo_decision_itinerary", edge_type=EdgeType.PRODUCED, created_at=decision_at),
-        GraphEdge(id="demo_edge_decision_memory", source_id="demo_decision_itinerary", target_id="demo_fact_october", edge_type=EdgeType.DEPENDS_ON, created_at=decision_at),
-        GraphEdge(id="demo_edge_artifact_decision", source_id="demo_artifact_itinerary", target_id="demo_decision_itinerary", edge_type=EdgeType.DEPENDS_ON, created_at=decision_at),
+        GraphEdge(id="story_edge_june_source", source_id="story_fact_june", target_id="story_msg_june", edge_type=EdgeType.SUPPORTED_BY, created_at=june_at),
+        GraphEdge(id="story_edge_october_source", source_id="story_fact_october", target_id="story_msg_october", edge_type=EdgeType.SUPPORTED_BY, created_at=october_at),
+        GraphEdge(id="story_edge_superseded", source_id="story_fact_june", target_id="story_fact_october", edge_type=EdgeType.SUPERSEDED_BY, created_at=october_at),
+        GraphEdge(id="story_edge_agent_decision", source_id="story_agent_planner", target_id="story_decision_itinerary", edge_type=EdgeType.PRODUCED, created_at=decision_at),
+        GraphEdge(id="story_edge_decision_memory", source_id="story_decision_itinerary", target_id="story_fact_october", edge_type=EdgeType.DEPENDS_ON, created_at=decision_at),
+        GraphEdge(id="story_edge_artifact_decision", source_id="story_artifact_itinerary", target_id="story_decision_itinerary", edge_type=EdgeType.DEPENDS_ON, created_at=decision_at),
     ]
     for edge in edges:
         graph_client.add_edge(edge)
 
-    return _demo_response()
+    return _studio_response()

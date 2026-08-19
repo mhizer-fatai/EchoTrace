@@ -1,6 +1,6 @@
 class App {
   constructor() {
-    this.sessionId = "memory:demo-user";
+    this.sessionId = "memory:studio-user";
     this.currentSessionId = this.sessionId;
     this.selectedNode = null;
     this.currentView = window.location.hash.startsWith("#studio") ? "studio" : "landing";
@@ -37,12 +37,12 @@ class App {
       this.applyTheme(theme);
       localStorage.setItem("echotrace_theme", theme);
     });
-    document.getElementById("demoChatForm")?.addEventListener("submit", (event) => this.submitChat(event));
+    document.getElementById("studioChatForm")?.addEventListener("submit", (event) => this.submitChat(event));
     document.getElementById("btnNewChat")?.addEventListener("click", () => this.newChat());
     document.getElementById("suggestionChips")?.addEventListener("click", (event) => {
       const chip = event.target.closest("[data-suggestion]");
       if (chip) {
-        document.getElementById("demoChatInput").value = chip.getAttribute("data-suggestion");
+        document.getElementById("studioChatInput").value = chip.getAttribute("data-suggestion");
         this.submitChat(new Event("submit"));
       }
     });
@@ -156,7 +156,7 @@ class App {
         empty.classList.toggle("hidden", graph.nodes.length > 0);
         empty.classList.toggle("grid", graph.nodes.length === 0);
       }
-      const counts = document.getElementById("demoCountsBadge");
+      const counts = document.getElementById("studioCountsBadge");
       if (counts) counts.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges`;
       await this.healthMonitor.fetchAndRender(this.sessionId);
       const times = graph.nodes.map((node) => Date.parse(node.valid_from)).filter(Number.isFinite);
@@ -218,35 +218,35 @@ class App {
   newChat() {
     const thread = document.getElementById("chatThread");
     if (thread) thread.innerHTML = '<div class="chat-empty">Talk to EchoTrace like a real agent. Each message becomes a new session, commits to HydraDB, and connects the graph live.</div>';
-    document.getElementById("demoChatInput")?.focus();
+    document.getElementById("studioChatInput")?.focus();
   }
 
   async submitChat(event) {
     event.preventDefault();
-    const input = document.getElementById("demoChatInput");
-    const button = document.getElementById("btnSendDemoMessage");
+    const input = document.getElementById("studioChatInput");
+    const button = document.getElementById("btnSendStudioMessage");
     const content = input.value.trim();
     if (!content) return;
     this.setBusy(button, true, "");
     this.appendChatBubble("user", this.escapeHtml(content));
     input.value = "";
-    this.setDemoWriteState("WRITING");
+    this.setStudioWriteState("WRITING");
     try {
-      const result = await API.sendDemoMessage(content);
+      const result = await API.sendStudioMessage(content);
       this.currentSessionId = result.session_id;
-      const badge = document.getElementById("demoSessionBadge");
+      const badge = document.getElementById("studioSessionBadge");
       if (badge) badge.textContent = result.session_id;
       if (result.reached_cap) {
         this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply));
-        this.setDemoWriteState("COMMITTED", result.engine_mode);
+        this.setStudioWriteState("COMMITTED", result.engine_mode);
         return;
       }
       const meta = `session ${result.session_id} · committed to HydraDB · ${result.node_count} nodes · ${result.edge_count} edges`;
       this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply), meta);
-      this.setDemoWriteState("COMMITTED", result.engine_mode);
+      this.setStudioWriteState("COMMITTED", result.engine_mode);
       await this.refreshStudio();
     } catch (error) {
-      this.setDemoWriteState("FAILED");
+      this.setStudioWriteState("FAILED");
       this.appendChatBubble("assistant", this.escapeHtml(`Error: ${error.message}`));
     } finally {
       this.setBusy(button, false, "");
@@ -257,9 +257,9 @@ class App {
     this.selectedNode = node;
   }
 
-  setDemoWriteState(state, engineMode = "HYDRADB BOLT") {
-    const indicator = document.getElementById("demoWriteIndicator");
-    const engine = document.getElementById("demoEngineMode");
+  setStudioWriteState(state, engineMode = "HYDRADB BOLT") {
+    const indicator = document.getElementById("studioWriteIndicator");
+    const engine = document.getElementById("studioEngineMode");
     if (indicator) {
       indicator.textContent = state;
       const successful = state === "COMMITTED";

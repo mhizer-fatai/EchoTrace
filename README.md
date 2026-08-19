@@ -73,7 +73,7 @@ Compose follows HydraDB v0.1.1's single-node local-storage contract. Durable fil
 
 HydraDB's local object-store path has an upstream limitation: repeated in-place `DETACH DELETE` operations can degrade as the WAL grows and eventually produce `client_query_runtime exceeded query timeout after 29999 ms` / `Transaction.Terminated`. EchoTrace avoids issuing destructive in-place clears, uses fresh scopes for integration tests, and runs a health watchdog. If a degraded store is detected, the app attempts an automatic reset when Docker socket access is available; otherwise it switches to the internal graph engine and displays the reason in the UI.
 
-To manually start clean before a demo or after a degraded store:
+To manually start clean before a studio recording or after a degraded store:
 
 ```powershell
 ./scripts/reset_store.ps1
@@ -215,11 +215,11 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/ingest/artifact`
 - `POST /api/memory/conversations`
 - `POST /api/memory/query`
-- `POST /api/demo/memory-story`
+- `POST /api/studio/story`
 - `POST /api/sources/assert`
-- `POST /api/demo/chat`
-- `POST /api/demo/replay`
-- `POST /api/demo/reset`
+- `POST /api/studio/chat`
+- `POST /api/studio/replay`
+- `POST /api/studio/reset`
 - `POST /api/facts/invalidate?session_id=...`
 - `POST /api/subgraph/heal?session_id=...`
 - `GET /api/graph/{session_id}`
@@ -239,7 +239,7 @@ The test suite covers cross-session retrieval, temporal supersession, abstention
 
 ## Demo For Reviewers
 
-After starting Compose, open `http://localhost:8000` and click **Launch App**. The studio opens as an interactive chatbot against one fixed user, `demo-user`. Every chat message is a new source session committed to HydraDB through the real `ingest_conversation()` pipeline, and the graph grows live on the right as you talk:
+After starting Compose, open `http://localhost:8000` and click **Launch App**. The studio opens as an interactive chatbot against one fixed user, `studio-user`. Every chat message is a new source session committed to HydraDB through the real `ingest_conversation()` pipeline, and the graph grows live on the right as you talk:
 
 - **Tell it something** — `My trip is in June.` → EchoTrace extracts a fact and draws a message→fact `SUPPORTED_BY` edge.
 - **Change your mind** — `I moved my trip to October.` → the June fact is superseded (`SUPERSEDED_BY` edge) and the new fact becomes active.
@@ -247,9 +247,9 @@ After starting Compose, open `http://localhost:8000` and click **Launch App**. T
 - **Detect a conflict** — `POST /api/sources/assert` records a claim from a source *without* superseding existing facts; asking `When is my trip?` now returns `CONFLICT` with both sources, and `I moved my trip to November.` supersedes *both* claims in one step.
 - **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
 
-Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.
+Hardcoded assistant replies (no LLM) keep the studio deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the studio memory.
 
-The API surface for the interactive demo is `POST /api/demo/chat`, `POST /api/demo/replay`, and `POST /api/demo/reset`.
+The API surface for the interactive studio is `POST /api/studio/chat`, `POST /api/studio/replay`, and `POST /api/studio/reset`.
 
 ## Benchmark
 
@@ -262,14 +262,14 @@ python -m scripts.benchmark --sessions 35 --target-tokens 115000
 What it does:
 
 1. **Creates a fresh, uniquely-named scope** (`memory:bench-user-<timestamp>`) per run. No `DETACH DELETE` is needed, so reruns never hit HydraDB's server-side query timeout on the 600-node corpus — each run is fully isolated from the last.
-2. **Ingests the same 35-session story** as the interactive demo (facts, supersessions, tasks, abstentions) through the real `ingest_conversation()` path — so the score backs the UI.
+2. **Ingests the same 35-session story** as the interactive studio (facts, supersessions, tasks, abstentions) through the real `ingest_conversation()` path — so the score backs the UI.
 3. **Pads the corpus deterministically** (seeded, no LLM) with fact-free filler toward the ~115,000-token target, then counts tokens (~4 chars/token).
 4. **Asks 18 scored questions** through `query_memory()` covering current-truth retrieval after supersession, the immediately-preceding value (history head), multi-session synthesis (email, workplace, preference), multi-hop timeline walks across two properties (e.g. which workplace was active during a given trip month), temporal snapshots ("as of" a date), and abstention (`INSUFFICIENT_EVIDENCE`) on never-recorded facts.
 5. **Prints a score table** with per-question PASS/FAIL, the run's scope, graph counts, facts created/superseded, and corpus size.
 
 Current verified result on real HydraDB: **100% across 35 sessions, ~115,000 tokens, 18 questions.** Rerun the script anytime — it is repeatable and self-isolating per run. The synthetic filler is disclosed as such — EchoTrace makes no claim of running an LLM benchmark on third-party datasets (see Third-Party Attribution).
 
-No model API key is required for the application, demo, memory query, or test suite.
+No model API key is required for the application, studio, memory query, or test suite.
 
 ## Live HydraDB Verification
 

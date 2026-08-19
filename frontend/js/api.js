@@ -61,13 +61,13 @@ const API = {
   },
 
   async loadMemoryStory() {
-    const res = await fetch(`${this.baseUrl}/api/demo/memory-story`, { method: 'POST' });
+    const res = await fetch(`${this.baseUrl}/api/studio/story`, { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   },
 
-  async sendDemoMessage(content, sessionId = null) {
-    const res = await fetch(`${this.baseUrl}/api/demo/chat`, {
+  async sendStudioMessage(content, sessionId = null) {
+    const res = await fetch(`${this.baseUrl}/api/studio/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, session_id: sessionId })
@@ -83,7 +83,7 @@ const API = {
     const res = await fetch(`${this.baseUrl}/api/memory/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: 'demo-user', question, include_history: true })
+      body: JSON.stringify({ user_id: 'studio-user', question, include_history: true })
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();

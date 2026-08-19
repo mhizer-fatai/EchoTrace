@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.config import settings
 from backend.app.engine.blast_radius import calculate_blast_radius
 from backend.app.engine.contradiction import generate_memory_health_report
-from backend.app.engine.demo import ingest_demo_message, replay_scale_story, reset_demo_story, seed_memory_story
+from backend.app.engine.studio import ingest_studio_message, replay_scale_story, reset_studio_story, seed_memory_story
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.memory import ingest_conversation, query_memory
@@ -33,7 +33,7 @@ from backend.app.models.schemas import (
     InvalidateFactRequest,
     IngestConversationRequest,
     IngestConversationResponse,
-    DemoChatRequest,
+    StudioChatRequest,
     MemoryQueryRequest,
     MemoryQueryResponse,
     MemoryHealthReport,
@@ -144,7 +144,7 @@ def post_query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
     return query_memory(request)
 
 
-@app.post("/api/demo/memory-story")
+@app.post("/api/studio/story")
 def post_seed_memory_story() -> Dict[str, Any]:
     return seed_memory_story()
 
@@ -159,22 +159,22 @@ def post_assert_source_claim(request: SourceAssertRequest) -> Dict[str, Any]:
     return assert_source_claim(request)
 
 
-@app.post("/api/demo/chat")
-def post_demo_chat(request: DemoChatRequest) -> Dict[str, Any]:
+@app.post("/api/studio/chat")
+def post_studio_chat(request: StudioChatRequest) -> Dict[str, Any]:
     try:
-        return ingest_demo_message(request.content, session_id=request.session_id)
+        return ingest_studio_message(request.content, session_id=request.session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/api/demo/replay")
-def post_replay_demo() -> Dict[str, Any]:
+@app.post("/api/studio/replay")
+def post_replay_studio() -> Dict[str, Any]:
     return replay_scale_story()
 
 
-@app.post("/api/demo/reset")
-def post_reset_demo() -> Dict[str, Any]:
-    return reset_demo_story()
+@app.post("/api/studio/reset")
+def post_reset_studio() -> Dict[str, Any]:
+    return reset_studio_story()
 
 
 # SDK Ingestion Endpoints
