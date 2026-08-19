@@ -10,10 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.config import settings
 from backend.app.engine.blast_radius import calculate_blast_radius
 from backend.app.engine.contradiction import generate_memory_health_report
-from backend.app.engine.demo import ingest_demo_message, replay_scale_story, reset_demo_story, seed_conflict, seed_memory_story
+from backend.app.engine.demo import ingest_demo_message, replay_scale_story, reset_demo_story, seed_memory_story
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.memory import ingest_conversation, query_memory
+from backend.app.engine.sources import SourceAssertRequest, assert_source_claim
 from backend.app.engine.watchdog import store_watchdog
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
@@ -148,9 +149,14 @@ def post_seed_memory_story() -> Dict[str, Any]:
     return seed_memory_story()
 
 
-@app.post("/api/demo/conflict")
-def post_seed_conflict() -> Dict[str, Any]:
-    return seed_conflict()
+@app.post("/api/sources/assert")
+def post_assert_source_claim(request: SourceAssertRequest) -> Dict[str, Any]:
+    """Record a claim from a source WITHOUT superseding existing facts.
+
+    Coexisting claims on the same property surface as a CONFLICT at query
+    time until an explicit change supersedes them all.
+    """
+    return assert_source_claim(request)
 
 
 @app.post("/api/demo/chat")

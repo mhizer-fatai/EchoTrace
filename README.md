@@ -216,7 +216,7 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/memory/conversations`
 - `POST /api/memory/query`
 - `POST /api/demo/memory-story`
-- `POST /api/demo/conflict`
+- `POST /api/sources/assert`
 - `POST /api/demo/chat`
 - `POST /api/demo/replay`
 - `POST /api/demo/reset`
@@ -244,7 +244,7 @@ After starting Compose, open `http://localhost:8000` and click **Launch App**. T
 - **Tell it something** — `My trip is in June.` → EchoTrace extracts a fact and draws a message→fact `SUPPORTED_BY` edge.
 - **Change your mind** — `I moved my trip to October.` → the June fact is superseded (`SUPERSEDED_BY` edge) and the new fact becomes active.
 - **Ask it** — `When is my trip?` → it answers from the current fact with its source citation and the superseded history, or returns `INSUFFICIENT_EVIDENCE` (abstention) when nothing is recorded.
-- **Detect a conflict** — `POST /api/demo/conflict` simulates a second agent session claiming a conflicting trip value without an update; asking `When is my trip?` now returns `CONFLICT` with both sources, and `I moved my trip to November.` supersedes *both* claims in one step.
+- **Detect a conflict** — `POST /api/sources/assert` records a claim from a source *without* superseding existing facts; asking `When is my trip?` now returns `CONFLICT` with both sources, and `I moved my trip to November.` supersedes *both* claims in one step.
 - **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
 
 Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.

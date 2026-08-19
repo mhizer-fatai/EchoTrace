@@ -2,10 +2,10 @@ from datetime import datetime, timedelta, timezone
 import uuid
 
 from backend.app.engine.memory import ingest_conversation, query_memory
+from backend.app.engine.sources import SourceAssertRequest, assert_source_claim
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
     ConversationMessage,
-    FactNode,
     FactStatus,
     IngestConversationRequest,
     MemoryQueryRequest,
@@ -16,7 +16,6 @@ def _user_with_conflicting_trip():
     user_id = f"conflict_user_{uuid.uuid4().hex[:10]}"
     scope = f"memory:{user_id}"
     first = datetime.now(timezone.utc) - timedelta(days=2)
-    now = datetime.now(timezone.utc)
 
     ingest_conversation(IngestConversationRequest(
         user_id=user_id,
@@ -25,18 +24,14 @@ def _user_with_conflicting_trip():
     ))
     # A second source records a conflicting value WITHOUT an explicit update,
     # so both facts remain active side-by-side.
-    graph_client.add_node(FactNode(
-        id=f"mem_conflict_{uuid.uuid4().hex[:8]}",
-        label="trip: July",
+    result = assert_source_claim(SourceAssertRequest(
+        session_id=scope,
         entity=user_id,
         property_name="trip",
         property_value="July",
-        status=FactStatus.VALID,
-        session_id=scope,
-        created_at=now,
-        valid_from=now,
-        metadata={"source_session_id": "session_05", "message_index": 0, "quote": "My trip is in July."},
+        source_session_id="session_05",
     ))
+    assert result["status"] == "asserted"
     return user_id
 
 
