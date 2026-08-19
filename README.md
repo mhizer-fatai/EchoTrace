@@ -8,7 +8,7 @@ Built for **Hack Hydra Track 03: Memory and Context Retrieval**.
 
 ## The differentiator in one line
 
-HydraDB stores and traverses the temporal graph. EchoTrace is the layer on top that decides **what is current, when to abstain, which decisions a changed memory invalidates, and what to re-run to repair them.** HydraDB gives you the graph; EchoTrace gives you the correctness guarantees and the self-healing workflow on top of it.
+HydraDB stores and traverses the temporal graph. EchoTrace is the layer on top that decides **what is current, when to abstain (missing *or conflicting* evidence), which decisions a changed memory invalidates, and what to re-run to repair them.** HydraDB gives you the graph; EchoTrace gives you the correctness guarantees and the self-healing workflow on top of it.
 
 ## Problem
 
@@ -37,6 +37,7 @@ HydraDB is the durable source of truth for EchoTrace's memory graph. It stores m
 - Temporal snapshots ("what was true as of a specific date")
 - Multi-hop synthesis across properties ("which workplace was active when my trip was in July?")
 - Explicit abstention when no supporting memory exists
+- Query-time conflict detection: two active claims disagree → `CONFLICT`, abstain until an explicit change supersedes both
 - Explicit fact, evidence, decision, and artifact provenance
 - Multi-hop blast-radius calculation
 - Fact invalidation and temporal supersession
@@ -215,6 +216,7 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/memory/conversations`
 - `POST /api/memory/query`
 - `POST /api/demo/memory-story`
+- `POST /api/demo/conflict`
 - `POST /api/demo/chat`
 - `POST /api/demo/replay`
 - `POST /api/demo/reset`
@@ -242,6 +244,7 @@ After starting Compose, open `http://localhost:8000` and click **Launch App**. T
 - **Tell it something** — `My trip is in June.` → EchoTrace extracts a fact and draws a message→fact `SUPPORTED_BY` edge.
 - **Change your mind** — `I moved my trip to October.` → the June fact is superseded (`SUPERSEDED_BY` edge) and the new fact becomes active.
 - **Ask it** — `When is my trip?` → it answers from the current fact with its source citation and the superseded history, or returns `INSUFFICIENT_EVIDENCE` (abstention) when nothing is recorded.
+- **Detect a conflict** — `POST /api/demo/conflict` simulates a second agent session claiming a conflicting trip value without an update; asking `When is my trip?` now returns `CONFLICT` with both sources, and `I moved my trip to November.` supersedes *both* claims in one step.
 - **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
 
 Hardcoded assistant replies (no LLM) keep the demo deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the demo memory.

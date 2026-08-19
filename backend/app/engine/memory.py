@@ -77,13 +77,14 @@ def _extract_message_claims(message: ConversationMessage) -> List[Tuple[str, str
 def ingest_conversation(request: IngestConversationRequest) -> IngestConversationResponse:
     scope = _memory_scope(request.user_id)
     existing = graph_client.get_session_graph(scope).get("nodes", [])
-    active_by_property: Dict[str, Dict] = {
-        node["property_name"]: node
-        for node in existing
-        if node.get("kind") == "FACT"
-        and node.get("entity") == request.user_id
-        and node.get("status") == FactStatus.VALID.value
-    }
+    active_by_property: Dict[str, List[Dict]] = {}
+    for node in existing:
+        if (
+            node.get("kind") == "FACT"
+            and node.get("entity") == request.user_id
+            and node.get("status") == FactStatus.VALID.value
+        ):
+            active_by_property.setdefault(node["property_name"], []).append(node)
     explicit_by_message: Dict[int, List[Tuple[str, str, float]]] = {}
     for claim in request.memories:
         if claim.message_index < 0 or claim.message_index >= len(request.messages):
@@ -114,8 +115,11 @@ def ingest_conversation(request: IngestConversationRequest) -> IngestConversatio
         if claims is None and message.role.lower() == "user":
             claims = [(name, value, 0.85) for name, value in _extract_message_claims(message)]
         for property_name, property_value, confidence in claims or []:
-            previous = active_by_property.get(property_name)
-            if previous and str(previous.get("property_value")).casefold() == property_value.casefold():
+            previous_active = active_by_property.get(property_name) or []
+            if any(
+                str(previous.get("property_value")).casefold() == property_value.casefold()
+                for previous in previous_active
+            ):
                 continue
             fact_id = f"mem_{uuid.uuid4().hex[:10]}"
             metadata = {
@@ -143,14 +147,17 @@ def ingest_conversation(request: IngestConversationRequest) -> IngestConversatio
                 edge_type=EdgeType.SUPPORTED_BY,
                 created_at=occurred_at,
             ))
-            if previous:
+            # Supersede every currently-active fact for this property so an
+            # explicit change resolves prior conflicts instead of leaving
+            # contradictory claims valid side-by-side.
+            for previous in previous_active:
                 graph_client.supersede_fact_nodes(previous["id"], fact_id, occurred_at)
                 superseded.append(previous["id"])
-            active_by_property[property_name] = graph_client.get_node(fact_id) or {
+            active_by_property[property_name] = [graph_client.get_node(fact_id) or {
                 "id": fact_id,
                 "property_name": property_name,
                 "property_value": property_value,
-            }
+            }]
             created.append(fact_id)
 
     return IngestConversationResponse(
@@ -341,6 +348,22 @@ def _detect_multihop(
     return None, None, None
 
 
+def _conflict_response(active: List[Dict], property_name: str) -> MemoryQueryResponse:
+    """Two or more active facts claim different values for the same property.
+
+    EchoTrace treats this as insufficient agreement to answer and abstains,
+    reporting every conflicting claim instead of guessing at one.
+    """
+    active_sorted = sorted(
+        active, key=lambda fact: str(fact.get("valid_from", "")), reverse=True
+    )
+    return MemoryQueryResponse(
+        status="CONFLICT",
+        property_name=property_name,
+        evidence=[_citation(fact) for fact in active_sorted],
+    )
+
+
 def query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
     nodes = graph_client.get_session_graph(_memory_scope(request.user_id)).get("nodes", [])
     facts = [
@@ -426,6 +449,10 @@ def query_memory(request: MemoryQueryRequest) -> MemoryQueryResponse:
     active = [fact for fact in related if fact.get("status") == FactStatus.VALID.value]
     if not active:
         return MemoryQueryResponse(status="INSUFFICIENT_EVIDENCE", property_name=property_name)
+    if len(active) > 1 and len({
+        str(fact.get("property_value", "")).casefold() for fact in active
+    }) > 1:
+        return _conflict_response(active, property_name)
     current = max(active, key=lambda fact: str(fact.get("valid_from", "")))
     history = sorted(
         (fact for fact in related if fact["id"] != current["id"]),
