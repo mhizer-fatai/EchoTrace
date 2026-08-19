@@ -105,7 +105,7 @@ class GraphVisualizer {
       return node.id;
     }
     if (node.kind === 'MESSAGE') {
-      return node.source_session_id ? `${node.source_session_id}: message` : (node.label || node.id);
+      return node.source_session_id ? node.source_session_id : (node.label || node.id);
     }
     if (node.kind === 'FACT') {
       if (node.entity && node.property_value) {
@@ -123,6 +123,50 @@ class GraphVisualizer {
       return node.artifact_name || (node.label ? node.label.replace('Artifact: ', '') : node.id);
     }
     return node.label || node.id;
+  }
+
+  truncateText(text, maxChars) {
+    const value = String(text || "");
+    if (value.length <= maxChars) return value;
+    return value.slice(0, Math.max(1, maxChars - 1)) + "…";
+  }
+
+  stableHash(text) {
+    let hash = 0;
+    const value = String(text || "");
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash * 31 + value.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  edgeColor(edge, isLight) {
+    const type = edge.edge_type || edge.type || "";
+    switch (type) {
+      case 'SUPPORTED_BY':
+        return isLight ? 'rgba(13, 148, 136, 0.65)' : 'rgba(45, 212, 191, 0.6)';
+      case 'SUPERSEDED_BY':
+        return isLight ? 'rgba(180, 83, 9, 0.7)' : 'rgba(245, 158, 11, 0.65)';
+      case 'DEPENDS_ON':
+      case 'PRODUCED':
+      case 'TRIGGERED':
+        return isLight ? 'rgba(37, 99, 235, 0.65)' : 'rgba(96, 165, 250, 0.6)';
+      default:
+        return isLight ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.25)';
+    }
+  }
+
+  curveControlPoint(source, target, edge) {
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const hash = this.stableHash(edge.id || `${source.id}-${target.id}`);
+    const bend = 18 + (hash % 3) * 8;
+    const sign = hash % 2 === 0 ? 1 : -1;
+    return {
+      x: (source.x + target.x) / 2 + (-dy / length) * bend * sign,
+      y: (source.y + target.y) / 2 + (dx / length) * bend * sign
+    };
   }
 
   calculateHierarchicalLayout() {
@@ -149,8 +193,8 @@ class GraphVisualizer {
 
     const tierKeys = ['MESSAGE', 'EVIDENCE', 'FACT', 'AGENT', 'DECISION', 'ARTIFACT'];
     const activeTiers = tierKeys.filter(k => tiers[k].length > 0);
-    const tierGap = 120;
-    const nodeGap = 34;
+    const tierGap = 160;
+    const nodeGap = 110;
     const margin = 90;
     const labelSpace = 34;
     const maxTierWidth = Math.max(320, width - margin * 2);
@@ -183,7 +227,8 @@ class GraphVisualizer {
 
     // If the total content is taller than the canvas, scale down compactly
     const totalUsed = cursorY - tierGap + margin;
-    const fitScale = Math.min(1, usableHeight / Math.max(1, totalUsed - margin));
+    let fitScale = Math.min(1, usableHeight / Math.max(1, totalUsed - margin));
+    fitScale = Math.max(0.55, fitScale);
     if (fitScale < 1) {
       this.nodes.forEach(node => {
         node.x = width / 2 + (node.x - width / 2) * fitScale;
@@ -314,25 +359,27 @@ class GraphVisualizer {
     const isLight = document.documentElement.classList.contains('theme-light');
     const isContaminated = source.is_stale || target.is_stale || source.status === 'INVALIDATED' || this.blastRadiusSet.has(source.id) || this.blastRadiusSet.has(target.id);
 
+    const control = this.curveControlPoint(source, target, edge);
+
     this.ctx.beginPath();
     this.ctx.moveTo(source.x, source.y);
-    this.ctx.lineTo(target.x, target.y);
+    this.ctx.quadraticCurveTo(control.x, control.y, target.x, target.y);
 
     if (isContaminated) {
       this.ctx.strokeStyle = isLight ? 'rgba(190, 18, 60, 0.9)' : 'rgba(225, 29, 72, 0.85)';
       this.ctx.lineWidth = 2.5;
       this.ctx.setLineDash([4, 4]);
     } else {
-      this.ctx.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.18)';
-      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeStyle = this.edgeColor(edge, isLight);
+      this.ctx.lineWidth = 2;
       this.ctx.setLineDash([]);
     }
 
     this.ctx.stroke();
     this.ctx.setLineDash([]);
 
-    // Arrowhead pointing from source to target
-    const angle = Math.atan2(target.y - source.y, target.x - source.x);
+    // Arrowhead following the curve tangent at the target
+    const angle = Math.atan2(target.y - control.y, target.x - control.x);
     const headLen = 7;
     const targetEdgeX = target.x - Math.cos(angle) * (target.radius + 2);
     const targetEdgeY = target.y - Math.sin(angle) * (target.radius + 2);
@@ -347,7 +394,7 @@ class GraphVisualizer {
       targetEdgeX - headLen * Math.cos(angle + Math.PI / 6),
       targetEdgeY - headLen * Math.sin(angle + Math.PI / 6)
     );
-    this.ctx.fillStyle = isContaminated ? (isLight ? '#BE123C' : '#E11D48') : (isLight ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.35)');
+    this.ctx.fillStyle = isContaminated ? (isLight ? '#BE123C' : '#E11D48') : this.edgeColor(edge, isLight);
     this.ctx.fill();
   }
 
@@ -395,7 +442,7 @@ class GraphVisualizer {
     this.ctx.stroke();
 
     // Clean node label badge
-    const labelText = this.getCleanShortLabel(node);
+    const labelText = this.truncateText(this.getCleanShortLabel(node), 20);
     this.ctx.font = '11px "JetBrains Mono", monospace';
     this.ctx.textAlign = 'center';
 

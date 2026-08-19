@@ -1,8 +1,14 @@
 # EchoTrace
 
-EchoTrace is a cross-session memory, provenance, and recovery service for AI agents. It retrieves the current answer from conversation history, cites the source session and message, preserves facts that were later overwritten, and abstains when no evidence exists. When memory drives agent work, EchoTrace also identifies affected decisions and artifacts and calls their registered executors in dependency order.
+EchoTrace is a deterministic, auditable agent memory layer on HydraDB. It turns cross-session chat history into temporal, source-backed memory: it returns the current answer with evidence, preserves superseded history, and abstains when no evidence exists — using plain rules over the graph, with no LLM in the retrieval loop.
+
+Beyond retrieval, EchoTrace treats memory as a dependency layer for agent work. When a memory changes, it computes the downstream blast radius across decisions and artifacts, and re-executes the affected workflow in dependency order through registered HTTP executors. The whole pipeline is judge-runnable: a repeatable benchmark ingests a 115,000-token, 35-session corpus and scores 100% on current truth, multi-hop synthesis, temporal as-of queries, and abstention.
 
 Built for **Hack Hydra Track 03: Memory and Context Retrieval**.
+
+## The differentiator in one line
+
+HydraDB stores and traverses the temporal graph. EchoTrace is the layer on top that decides **what is current, when to abstain, which decisions a changed memory invalidates, and what to re-run to repair them.** HydraDB gives you the graph; EchoTrace gives you the correctness guarantees and the self-healing workflow on top of it.
 
 ## Problem
 

@@ -369,6 +369,7 @@ html.motion-ready .reveal-scale.is-revealed {
 
 .panel-title .material-symbols-outlined { color: var(--vermilion); font-size: 17px; }
 .legend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+.legend-line { display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
 
 .chat-empty {
   max-width: 90%;
