@@ -22,6 +22,31 @@ def _execute_node(
     if not executor_url:
         raise ValueError(f"Stale node '{node['id']}' has no executor_url.")
 
+    if executor_url.startswith("studio://"):
+        current_trip = next(
+            (
+                fact for fact in active_facts
+                if fact.get("property_name") == "trip"
+            ),
+            None,
+        )
+        if not current_trip:
+            raise ValueError("Studio executor has no current trip memory.")
+        trip = str(current_trip.get("property_value", ""))
+        if node.get("kind") == NodeKind.DECISION.value:
+            return ExecutorResponse(
+                success=True,
+                rationale=f"Replanned using the current trip memory: {trip}.",
+                metadata={"healed_with_fact_id": current_trip["id"], "healed_value": trip},
+            )
+        if node.get("kind") == NodeKind.ARTIFACT.value:
+            return ExecutorResponse(
+                success=True,
+                content=f"# {trip} trip\n\nThis itinerary was rebuilt using the current trip memory.",
+                metadata={"healed_with_fact_id": current_trip["id"], "healed_value": trip},
+            )
+        raise ValueError(f"Studio executor does not support node '{node['id']}'.")
+
     parsed_url = urlparse(executor_url)
     allowed_hosts = {
         host.strip().lower()

@@ -54,6 +54,15 @@ const API = {
     return await res.json();
   },
 
+  async healStudioPlan() {
+    const res = await fetch(`${this.baseUrl}/api/studio/heal`, { method: 'POST' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  },
+
   async getMemoryHealth(sessionId = 'default') {
     const res = await fetch(`${this.baseUrl}/api/memory-health/${sessionId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

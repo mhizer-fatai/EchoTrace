@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
+from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.memory import _extract_message_claims, ingest_conversation, query_memory
 from backend.app.graph.client import graph_client
 from backend.app.models.schemas import (
@@ -164,7 +165,7 @@ def _execute_studio_task(content: str, source_session_id: str, occurred_at: date
         agent_id=agent_id,
         action_type=f"Plan {property_name.replace('_', ' ')}",
         rationale=f"Latest supported {property_name.replace('_', ' ')} is {current_fact['property_value']}.",
-        executor_url="http://host.docker.internal:8001/studio/decision",
+        executor_url="studio://decision",
         session_id=STUDIO_SESSION_ID,
         created_at=occurred_at,
         valid_from=occurred_at,
@@ -175,7 +176,7 @@ def _execute_studio_task(content: str, source_session_id: str, occurred_at: date
         artifact_name=f"{current_fact['property_value'].lower()}_itinerary.md",
         content=f"# {current_fact['property_value']} trip\n\nThe itinerary uses the current memory from {current_fact.get('metadata', {}).get('source_session_id', source_session_id)}.",
         artifact_type="document",
-        executor_url="http://host.docker.internal:8001/studio/artifact",
+        executor_url="studio://artifact",
         session_id=STUDIO_SESSION_ID,
         created_at=occurred_at,
         valid_from=occurred_at,
@@ -406,12 +407,20 @@ def ingest_studio_message(
 
     created_facts = [_fact_summary(fid) for fid in result.memories_created]
     superseded_facts = [_fact_summary(fid) for fid in result.memories_superseded]
+    stale_nodes: List[str] = []
+    for fact_id in result.memories_superseded:
+        for node_id in graph_client.get_downstream_dependencies(fact_id, STUDIO_SESSION_ID):
+            if node_id not in stale_nodes:
+                graph_client.mark_node_stale(node_id, is_stale=True)
+                stale_nodes.append(node_id)
 
     if created_facts:
         new_fact = created_facts[0]
         if superseded_facts:
             old_fact = superseded_facts[0]
             reply = f"Updated your memory! **{new_fact['property_name'].replace('_', ' ')}** is now **{new_fact['property_value']}**.\n\n🔄 **Superseded Previous:** `{old_fact['property_value']}`\n⚡ **HydraDB:** Created `SUPERSEDED_BY` temporal edge"
+            if stale_nodes:
+                reply += f"\n\n⚠️ **Outdated Work Found:** {len(stale_nodes)} dependent item(s) need healing."
         else:
             reply = f"Saved to cross-session memory! **{new_fact['property_name'].replace('_', ' ')}** is **{new_fact['property_value']}**.\n\n⚡ **HydraDB:** Stored with `SUPPORTED_BY` provenance edge"
     else:
@@ -428,10 +437,54 @@ def ingest_studio_message(
         "extracted": extracted,
         "created": created_facts,
         "superseded": superseded_facts,
+        "stale_nodes": stale_nodes,
         "hydradb_connected": graph_client.connected_to_hydradb,
         "engine_mode": "HydraDB Bolt" if graph_client.connected_to_hydradb else "Internal Graph Engine",
         "node_count": len(current_graph.get("nodes", [])),
         "edge_count": len(current_graph.get("edges", [])),
+    }
+
+
+def heal_studio_plan() -> Dict[str, Any]:
+    current_fact = _current_active_fact("trip")
+    if not current_fact:
+        raise ValueError("No current trip memory is available.")
+
+    result = heal_subgraph(STUDIO_SESSION_ID)
+    if not result.success:
+        return {
+            **result.model_dump(),
+            "assistant_reply": result.message,
+        }
+
+    trip = str(current_fact["property_value"])
+    for node_id in result.re_executed_nodes:
+        node = graph_client.get_node(node_id) or {}
+        if node.get("kind") == "DECISION":
+            graph_client.update_node(node_id, {
+                "label": f"Plan the {trip} itinerary",
+                "action_type": f"Plan {trip} trip",
+            })
+            graph_client.add_edge(GraphEdge(
+                id=f"edge_healed_dec_mem_{node_id}_{current_fact['id']}",
+                source_id=node_id,
+                target_id=current_fact["id"],
+                edge_type=EdgeType.DEPENDS_ON,
+                created_at=datetime.now(timezone.utc),
+            ))
+        elif node.get("kind") == "ARTIFACT":
+            graph_client.update_node(node_id, {
+                "label": f"{trip} itinerary",
+                "artifact_name": f"{trip.lower()}_itinerary.md",
+            })
+
+    return {
+        **result.model_dump(),
+        "current_fact": _fact_summary(current_fact["id"]),
+        "assistant_reply": (
+            f"Auto-heal complete. The plan and itinerary were rebuilt using "
+            f"the current trip memory: **{trip}**."
+        ),
     }
 
 
@@ -576,7 +629,7 @@ def seed_memory_story() -> Dict[str, Any]:
             agent_id="story_agent_planner",
             action_type="Plan October trip",
             rationale="The latest supported trip month is October.",
-            executor_url="http://host.docker.internal:8001/studio/decision",
+            executor_url="studio://decision",
             session_id=STUDIO_SESSION_ID,
             created_at=decision_at,
             valid_from=decision_at,
@@ -587,7 +640,7 @@ def seed_memory_story() -> Dict[str, Any]:
             artifact_name="october_itinerary.md",
             content="# October trip\n\nThe itinerary uses the current memory from session 18.",
             artifact_type="document",
-            executor_url="http://host.docker.internal:8001/studio/artifact",
+            executor_url="studio://artifact",
             session_id=STUDIO_SESSION_ID,
             created_at=decision_at,
             valid_from=decision_at,

@@ -1,5 +1,16 @@
 class App {
   constructor() {
+    this.guidedDemoSteps = [
+      "My trip is in June.",
+      "I work at Vertex Labs.",
+      "I moved my trip to October.",
+      "When is my trip?",
+      "Which workplace was active when my trip was in October?",
+      "Which university did I visit?",
+      "Plan my trip itinerary.",
+      "I moved my trip to November.",
+    ];
+    this.guidedCompletedSteps = new Set();
     this.sessionId = "memory:studio-user";
     this.currentSessionId = this.sessionId;
     this.selectedNode = null;
@@ -46,6 +57,21 @@ class App {
         this.submitChat(new Event("submit"));
       }
     });
+    document.getElementById("healAction")?.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-heal-studio]");
+      if (!button) return;
+      button.disabled = true;
+      button.textContent = "UPDATING PLAN...";
+      try {
+        const result = await API.healStudioPlan();
+        this.appendChatBubble("assistant", this.renderMarkdown(result.assistant_reply));
+        await this.refreshStudio();
+      } catch (error) {
+        this.message(`Auto-heal failed: ${error.message}`, true);
+        button.disabled = false;
+        button.textContent = "AUTO-HEAL PLAN";
+      }
+    });
   }
 
   initializeScrollStory() {
@@ -81,7 +107,6 @@ class App {
     const url = new URL(window.location.href);
     url.hash = "studio";
     window.history.replaceState({}, "", url);
-    this.populateSuggestions();
     await this.refreshStudio();
   }
 
@@ -158,6 +183,8 @@ class App {
       }
       const counts = document.getElementById("studioCountsBadge");
       if (counts) counts.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges`;
+      this.populateSuggestions(graph.nodes || []);
+      this.updateHealAction(graph.nodes || []);
       await this.healthMonitor.fetchAndRender(this.sessionId);
       const times = graph.nodes.map((node) => Date.parse(node.valid_from)).filter(Number.isFinite);
       if (times.length) this.timelineController.setRange(new Date(Math.min(...times)).toISOString(), new Date().toISOString());
@@ -167,24 +194,56 @@ class App {
     }
   }
 
-  populateSuggestions() {
+  populateSuggestions(nodes = []) {
     const container = document.getElementById("suggestionChips");
     if (!container) return;
-    const suggestions = [
-      "My trip is in June.",
-      "When is my trip?",
-      "Plan my trip itinerary.",
-      "Where did I go to university?",
-    ];
+    const recordedMessages = new Set(
+      nodes
+        .filter((node) => node.kind === "MESSAGE")
+        .map((node) => String(node.content || "").trim().toLowerCase()),
+    );
+    this.guidedCompletedSteps.forEach((step) => recordedMessages.add(step));
+    const nextSuggestion = this.guidedDemoSteps.find(
+      (step) => !recordedMessages.has(step.toLowerCase()),
+    );
     container.innerHTML = "";
-    suggestions.forEach((text) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.setAttribute("data-suggestion", text);
-      chip.className = "rounded-full border border-border-subtle bg-surface-elevated px-3 py-1.5 font-mono text-[11px] text-text-secondary transition-colors hover:border-vermilion/60 hover:text-text-primary";
-      chip.textContent = text;
-      container.appendChild(chip);
-    });
+    if (!nextSuggestion) {
+      const done = document.createElement("span");
+      done.className = "font-mono text-[11px] text-status-healthy";
+      done.textContent = "DEMO FLOW COMPLETE";
+      container.appendChild(done);
+      return;
+    }
+
+    const label = document.createElement("span");
+    label.className = "w-full font-mono text-[10px] text-text-muted";
+    label.textContent = "NEXT DEMO STEP";
+    container.appendChild(label);
+
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.setAttribute("data-suggestion", nextSuggestion);
+    chip.className = "w-full rounded border border-vermilion/50 bg-vermilion/10 px-3 py-2 text-left font-mono text-[11px] text-text-primary transition-colors hover:border-vermilion hover:bg-vermilion/20";
+    chip.textContent = nextSuggestion;
+    container.appendChild(chip);
+  }
+
+  updateHealAction(nodes = []) {
+    const container = document.getElementById("healAction");
+    if (!container) return;
+    const stale = nodes.filter((node) => node.is_stale && ["DECISION", "ARTIFACT"].includes(node.kind));
+    container.innerHTML = "";
+    if (!stale.length) {
+      container.classList.add("hidden");
+      return;
+    }
+    container.classList.remove("hidden");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-heal-studio", "true");
+    button.className = "w-full rounded border border-status-warning/60 bg-status-warning/10 px-3 py-2 font-mono text-[11px] font-bold text-status-warning hover:bg-status-warning/20";
+    button.textContent = `AUTO-HEAL PLAN (${stale.length} outdated item${stale.length === 1 ? "" : "s"})`;
+    container.appendChild(button);
   }
 
   appendChatBubble(role, html, meta) {
@@ -233,6 +292,7 @@ class App {
     this.setStudioWriteState("WRITING");
     try {
       const result = await API.sendStudioMessage(content);
+      this.guidedCompletedSteps.add(content.toLowerCase());
       this.currentSessionId = result.session_id;
       const badge = document.getElementById("studioSessionBadge");
       if (badge) badge.textContent = result.session_id;

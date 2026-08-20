@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.config import settings
 from backend.app.engine.blast_radius import calculate_blast_radius
 from backend.app.engine.contradiction import generate_memory_health_report
-from backend.app.engine.studio import ingest_studio_message, replay_scale_story, reset_studio_story, seed_memory_story
+from backend.app.engine.studio import heal_studio_plan, ingest_studio_message, replay_scale_story, reset_studio_story, seed_memory_story
 from backend.app.engine.healer import heal_subgraph
 from backend.app.engine.invalidator import invalidate_fact
 from backend.app.engine.memory import ingest_conversation, query_memory
@@ -175,6 +175,14 @@ def post_replay_studio() -> Dict[str, Any]:
 @app.post("/api/studio/reset")
 def post_reset_studio() -> Dict[str, Any]:
     return reset_studio_story()
+
+
+@app.post("/api/studio/heal")
+def post_heal_studio() -> Dict[str, Any]:
+    try:
+        return heal_studio_plan()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # SDK Ingestion Endpoints

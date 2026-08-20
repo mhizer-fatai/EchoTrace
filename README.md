@@ -42,6 +42,7 @@ HydraDB is the durable source of truth for EchoTrace's memory graph. It stores m
 - Multi-hop blast-radius calculation
 - Fact invalidation and temporal supersession
 - Real decision and artifact re-execution through HTTP webhooks
+- Studio auto-heal: changed memory marks dependent work stale, then rebuilds the plan and artifact from the newest fact
 - Failure-safe execution that leaves failed nodes stale
 - Historical graph snapshots and contradiction reporting
 - Python instrumentation SDK and operational dashboard
@@ -220,6 +221,7 @@ Any network error, non-success HTTP status, malformed response, or `success: fal
 - `POST /api/studio/chat`
 - `POST /api/studio/replay`
 - `POST /api/studio/reset`
+- `POST /api/studio/heal`
 - `POST /api/facts/invalidate?session_id=...`
 - `POST /api/subgraph/heal?session_id=...`
 - `GET /api/graph/{session_id}`
@@ -246,10 +248,11 @@ After starting Compose, open `http://localhost:8000` and click **Launch App**. T
 - **Ask it** — `When is my trip?` → it answers from the current fact with its source citation and the superseded history, or returns `INSUFFICIENT_EVIDENCE` (abstention) when nothing is recorded.
 - **Detect a conflict** — `POST /api/sources/assert` records a claim from a source *without* superseding existing facts; asking `When is my trip?` now returns `CONFLICT` with both sources, and `I moved my trip to November.` supersedes *both* claims in one step.
 - **Give it a task** — `Plan my trip itinerary.` → a live `Travel Planner` agent → decision → itinerary artifact chain appears, wired `DEPENDS_ON` to the *current* (superseding) fact, so the old fact is visibly not correct anymore.
+- **Auto-heal the task** — after `I moved my trip to November.`, dependent October work is marked stale. Click **AUTO-HEAL PLAN** and EchoTrace rebuilds the decision and itinerary with November, then reconnects the plan to the current fact.
 
 Hardcoded assistant replies (no LLM) keep the studio deterministic, while every write goes through the real HydraDB pipeline. **New chat** starts a fresh thread as a new session (up to 35), **Replay 35 sessions** ingests a deterministic 35-session corpus through the same path (`scale_01`–`scale_35`, idempotent — existing sessions are skipped, not duplicated), and **Reset story** clears the studio memory.
 
-The API surface for the interactive studio is `POST /api/studio/chat`, `POST /api/studio/replay`, and `POST /api/studio/reset`.
+The API surface for the interactive studio is `POST /api/studio/chat`, `POST /api/studio/replay`, `POST /api/studio/reset`, and `POST /api/studio/heal`.
 
 ## Benchmark
 

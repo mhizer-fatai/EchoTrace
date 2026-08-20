@@ -48,6 +48,7 @@ hydradb-data/auth-token
 .env.*.local
 opencode.json
 DEMO_SCRIPT.txt
+DEMO_SCRIPT.pdf
 
 # IDE & OS
 .vscode/
